@@ -6,9 +6,9 @@
 <br />
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./public/soliton-font-white.png" />
-  <source media="(prefers-color-scheme: light)" srcset="./public/soliton-font-dark.png" />
-  <img alt="SolitonTerm" src="./public/soliton-font-dark.png" height="44" />
+  <source media="(prefers-color-scheme: dark)" srcset="./public/soliton-wordmark.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="./public/soliton-wordmark-light.svg" />
+  <img alt="SolitonTerm" src="./public/soliton-wordmark-light.svg" height="64" />
 </picture>
 
 <br />

@@ -14,7 +14,7 @@ First public release.
 - Multi-exec broadcast, parametric snippets (`{{variables}}`), session-only alias injection, ⌘K command palette.
 - Workspace export/import (secrets optional) with all-or-nothing, validated imports.
 - Welcome screen for an empty vault; live tab connection status; persisted theme, font and sidebar preferences.
-- New brand identity: vector logo set, app icon, light/dark variants.
+- New brand identity: vector logo and wordmark (stacked + horizontal), app icon, light/dark variants.
 - CI (typecheck, tests, fmt, clippy) and tagged release workflow for macOS arm64 and x86_64.
 
 ### Security

@@ -560,11 +560,11 @@ export const TerminalWorkspace: React.FC = () => {
             <img
               src={
                 isLightHex(currentThemeObj.theme.background)
-                  ? "/soliton-font-dark.png"
-                  : "/soliton-font-white.png"
+                  ? "/soliton-wordmark-light.svg"
+                  : "/soliton-wordmark.svg"
               }
-              alt="SolitonTerm"
-              className="h-4 w-auto object-contain mb-2 opacity-75"
+              alt="Soliton Term"
+              className="h-12 w-auto object-contain mb-3"
               draggable={false}
             />
             {hosts.length === 0 ? (

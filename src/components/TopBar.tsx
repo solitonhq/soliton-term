@@ -68,11 +68,11 @@ export const TopBar: React.FC = () => {
           <img
             src={
               appTheme === "light"
-                ? "/soliton-font-dark.png"
-                : "/soliton-font-white.png"
+                ? "/soliton-wordmark-horizontal-light.svg"
+                : "/soliton-wordmark-horizontal.svg"
             }
-            alt="SolitonTerm"
-            className="h-3.5 w-auto object-contain opacity-95"
+            alt="Soliton Term"
+            className="h-[15px] w-auto object-contain"
             draggable={false}
           />
         </div>
