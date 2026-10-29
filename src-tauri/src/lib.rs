@@ -1,5 +1,7 @@
 pub mod db;
 pub mod ssh_pty;
+pub mod validate;
+pub mod vault_key;
 
 use db::{
     AliasItem, CredentialItem, DatabaseManager, HostEntry, HostGroup, SnippetItem, VaultSnapshot,
@@ -37,6 +39,7 @@ fn import_vault_snapshot(
     snapshot: VaultSnapshot,
     replace_existing: bool,
 ) -> Result<VaultSnapshot, String> {
+    validate::snapshot(&snapshot)?;
     db.import_snapshot(snapshot, replace_existing)
         .map_err(|e| e.to_string())?;
     db.load_snapshot().map_err(|e| e.to_string())
@@ -44,6 +47,7 @@ fn import_vault_snapshot(
 
 #[tauri::command]
 fn save_group(db: State<'_, DatabaseManager>, item: HostGroup) -> Result<(), String> {
+    validate::group(&item)?;
     db.upsert_group(item).map_err(|e| e.to_string())
 }
 
@@ -54,6 +58,7 @@ fn remove_group(db: State<'_, DatabaseManager>, id: String) -> Result<(), String
 
 #[tauri::command]
 fn save_credential(db: State<'_, DatabaseManager>, item: CredentialItem) -> Result<(), String> {
+    validate::credential(&item)?;
     db.upsert_credential(item).map_err(|e| e.to_string())
 }
 
@@ -64,6 +69,7 @@ fn remove_credential(db: State<'_, DatabaseManager>, id: String) -> Result<(), S
 
 #[tauri::command]
 fn save_host(db: State<'_, DatabaseManager>, item: HostEntry) -> Result<(), String> {
+    validate::host(&item)?;
     db.upsert_host(item).map_err(|e| e.to_string())
 }
 
@@ -74,6 +80,7 @@ fn remove_host(db: State<'_, DatabaseManager>, id: String) -> Result<(), String>
 
 #[tauri::command]
 fn save_snippet(db: State<'_, DatabaseManager>, item: SnippetItem) -> Result<(), String> {
+    validate::snippet(&item)?;
     db.upsert_snippet(item).map_err(|e| e.to_string())
 }
 
@@ -84,6 +91,7 @@ fn remove_snippet(db: State<'_, DatabaseManager>, id: String) -> Result<(), Stri
 
 #[tauri::command]
 fn save_alias(db: State<'_, DatabaseManager>, item: AliasItem) -> Result<(), String> {
+    validate::alias(&item)?;
     db.upsert_alias(item).map_err(|e| e.to_string())
 }
 
@@ -173,8 +181,8 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .unwrap_or_else(|_| std::env::temp_dir().join("soliton-term"));
-            let db_manager =
-                DatabaseManager::new(app_dir).expect("Failed to initialize Soliton Vault SQLite DB");
+            ssh_pty::purge_stale_key_files();
+            let db_manager = DatabaseManager::new(app_dir)?;
             app.manage(db_manager);
             app.manage(SshPtyManager::new());
             Ok(())
@@ -201,6 +209,11 @@ pub fn run() {
             close_pty_session,
             build_alias_injection_payload
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Soliton Term application");
+        .build(tauri::generate_context!())
+        .expect("error while building Soliton Term application")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                ssh_pty::purge_stale_key_files();
+            }
+        });
 }
