@@ -107,7 +107,7 @@ impl DatabaseManager {
             cipher: Aes256Gcm::new(&key_bytes.into()),
         };
         manager.init_schema().map_err(|e| e.to_string())?;
-        manager.seed_if_empty().map_err(|e| e.to_string())?;
+        manager.seed_starters_once().map_err(|e| e.to_string())?;
         Ok(manager)
     }
 
@@ -165,6 +165,10 @@ impl DatabaseManager {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         conn.execute_batch(
             "
+            CREATE TABLE IF NOT EXISTS meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS groups (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -210,158 +214,95 @@ impl DatabaseManager {
         Ok(())
     }
 
-    fn seed_if_empty(&self) -> SqlResult<()> {
-        let count: i64 = {
-            let conn = self
-                .conn
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            conn.query_row("SELECT COUNT(*) FROM hosts", [], |r| r.get(0))?
-        };
-        if count > 0 {
+    /// First-run content: useful, non-sensitive snippets and aliases. Never
+    /// hosts or credentials. A `meta` flag makes this a one-time event, so
+    /// deleting every snippet later does not bring them back.
+    fn seed_starters_once(&self) -> SqlResult<()> {
+        let (seeded, has_content): (bool, bool) = self.with_conn(|c| {
+            let seeded = c
+                .query_row("SELECT 1 FROM meta WHERE key = 'starters_seeded'", [], |_| Ok(()))
+                .is_ok();
+            let has_content: i64 = c.query_row(
+                "SELECT (SELECT COUNT(*) FROM hosts) + (SELECT COUNT(*) FROM snippets) + (SELECT COUNT(*) FROM aliases)",
+                [],
+                |r| r.get(0),
+            )?;
+            Ok((seeded, has_content > 0))
+        })?;
+        if seeded {
             return Ok(());
         }
-
-        // Seed default groups
-        self.upsert_group(HostGroup {
-            id: "grp-prod".into(),
-            name: "Production Cluster".into(),
-            parent_id: None,
-            icon: None,
-        })?;
-        self.upsert_group(HostGroup {
-            id: "grp-prod-k8s".into(),
-            name: "Kubernetes Nodes".into(),
-            parent_id: Some("grp-prod".into()),
-            icon: None,
-        })?;
-        self.upsert_group(HostGroup {
-            id: "grp-prod-db".into(),
-            name: "Database Replicas".into(),
-            parent_id: Some("grp-prod".into()),
-            icon: None,
-        })?;
-        self.upsert_group(HostGroup {
-            id: "grp-stage".into(),
-            name: "Staging & QA".into(),
-            parent_id: None,
-            icon: None,
-        })?;
-        self.upsert_group(HostGroup {
-            id: "grp-dmz".into(),
-            name: "DMZ / Edge Gateways".into(),
-            parent_id: None,
-            icon: None,
-        })?;
-
-        // Seed encrypted demo credentials (safe placeholders for open-source distribution)
-        self.upsert_credential(CredentialItem {
-            id: "cred-root-prod".into(),
-            name: "Prod Root Vault Key".into(),
-            username: "root".into(),
-            secret_type: "password".into(),
-            secret_value: "<DEMO_ROOT_PASSWORD_CHANGE_ME>".into(),
-            description: Some(
-                "Primary production root access credential (Demo placeholder)".into(),
-            ),
-        })?;
-        self.upsert_credential(CredentialItem {
-            id: "cred-devops".into(),
-            name: "DevOps Automation User".into(),
-            username: "soliton_ops".into(),
-            secret_type: "password".into(),
-            secret_value: "<DEMO_OPS_PASSWORD_CHANGE_ME>".into(),
-            description: Some(
-                "Standard SRE & Kubernetes operator account (Demo placeholder)".into(),
-            ),
-        })?;
-        self.upsert_credential(CredentialItem {
-            id: "cred-db-admin".into(),
-            name: "PostgreSQL Cluster Admin".into(),
-            username: "pgadmin".into(),
-            secret_type: "ssh_key".into(),
-            secret_value: "<SSH_ED25519_PRIVATE_KEY_PLACEHOLDER>".into(),
-            description: Some("SSH key for DB replica servers (Demo placeholder)".into()),
-        })?;
-
-        // Seed hosts
-        self.upsert_host(HostEntry {
-            id: "host-1".into(),
-            name: "k8s-master-01".into(),
-            hostname: "10.240.10.11".into(),
-            port: 22,
-            group_id: "grp-prod-k8s".into(),
-            credential_id: "cred-devops".into(),
-            tags: vec!["prod".into(), "k8s".into(), "control-plane".into()],
-            os: Some("kubernetes".into()),
-            inject_aliases: true,
-            notes: Some("Primary Kubernetes API server".into()),
-        })?;
-        self.upsert_host(HostEntry {
-            id: "host-2".into(),
-            name: "k8s-worker-gpu-01".into(),
-            hostname: "10.240.10.21".into(),
-            port: 22,
-            group_id: "grp-prod-k8s".into(),
-            credential_id: "cred-devops".into(),
-            tags: vec!["prod".into(), "k8s".into(), "worker".into(), "gpu".into()],
-            os: Some("linux".into()),
-            inject_aliases: true,
-            notes: Some("High-memory GPU worker node".into()),
-        })?;
-        self.upsert_host(HostEntry {
-            id: "host-3".into(),
-            name: "pg-primary-db01".into(),
-            hostname: "10.240.20.5".into(),
-            port: 2222,
-            group_id: "grp-prod-db".into(),
-            credential_id: "cred-db-admin".into(),
-            tags: vec!["prod".into(), "database".into(), "postgres".into()],
-            os: Some("ubuntu".into()),
-            inject_aliases: true,
-            notes: Some("Primary PostgreSQL 16 instance".into()),
-        })?;
-
-        // Seed snippets
-        self.upsert_snippet(SnippetItem {
-            id: "snip-1".into(),
-            name: "System Health & Resource Check".into(),
-            command: "uptime && free -h && df -hT | grep -v tmpfs".into(),
-            category: "Diagnostics".into(),
-            description: "Quick overview of CPU load, RAM, and disk usage".into(),
-        })?;
-        self.upsert_snippet(SnippetItem {
-            id: "snip-2".into(),
-            name: "Kubernetes Pod CrashLoop Finder".into(),
-            command: "kubectl get pods -A --field-selector=status.phase!=Running".into(),
-            category: "Kubernetes".into(),
-            description: "List all non-running pods across all namespaces".into(),
-        })?;
-
-        // Seed temporary aliases
-        self.upsert_alias(AliasItem {
-            id: "al-1".into(),
-            alias: "ll".into(),
-            command: "ls -lah --color=auto".into(),
-            description: "Detailed human-readable directory listing".into(),
-            enabled: true,
-        })?;
-        self.upsert_alias(AliasItem {
-            id: "al-2".into(),
-            alias: "k".into(),
-            command: "kubectl".into(),
-            description: "Shorthand for kubectl CLI".into(),
-            enabled: true,
-        })?;
-        self.upsert_alias(AliasItem {
-            id: "al-3".into(),
-            alias: "dcu".into(),
-            command: "docker compose up -d".into(),
-            description: "Start docker compose stack in detached mode".into(),
-            enabled: true,
-        })?;
-
-        Ok(())
+        if !has_content {
+            let snippet =
+                |id: &str, name: &str, command: &str, category: &str, description: &str| {
+                    SnippetItem {
+                        id: id.into(),
+                        name: name.into(),
+                        command: command.into(),
+                        category: category.into(),
+                        description: description.into(),
+                    }
+                };
+            let alias = |id: &str, alias: &str, command: &str, description: &str| AliasItem {
+                id: id.into(),
+                alias: alias.into(),
+                command: command.into(),
+                description: description.into(),
+                enabled: true,
+            };
+            for s in [
+                snippet(
+                    "snip-health",
+                    "System Health & Resource Check",
+                    "uptime && free -h && df -hT | grep -v tmpfs",
+                    "Diagnostics",
+                    "CPU load, RAM and disk usage at a glance",
+                ),
+                snippet(
+                    "snip-k8s-logs",
+                    "K8s Pod Logs by Namespace",
+                    "kubectl logs -n {{namespace}} -l app={{service_name}} --tail={{lines}}",
+                    "Kubernetes",
+                    "Recent logs for a service, with prompts for each {{variable}}",
+                ),
+                snippet(
+                    "snip-port",
+                    "Who Is Listening on a Port",
+                    "ss -tulpn | grep :{{port}}",
+                    "Network",
+                    "Find the process bound to a TCP/UDP port",
+                ),
+                snippet(
+                    "snip-docker-stats",
+                    "Docker Container Stats",
+                    "docker stats --no-stream",
+                    "Containers",
+                    "CPU and memory snapshot per container",
+                ),
+            ] {
+                self.upsert_snippet(s)?;
+            }
+            for a in [
+                alias("al-ll", "ll", "ls -lah", "Detailed directory listing"),
+                alias("al-k", "k", "kubectl", "Shorthand for kubectl"),
+                alias(
+                    "al-dcu",
+                    "dcu",
+                    "docker compose up -d",
+                    "Start a compose stack in the background",
+                ),
+                alias("al-ports", "ports", "ss -tulpn", "Show listening ports"),
+            ] {
+                self.upsert_alias(a)?;
+            }
+        }
+        self.with_conn(|c| {
+            c.execute(
+                "INSERT OR IGNORE INTO meta (key, value) VALUES ('starters_seeded', '1')",
+                [],
+            )
+            .map(|_| ())
+        })
     }
 
     pub fn load_snapshot(&self) -> SqlResult<VaultSnapshot> {
@@ -707,11 +648,21 @@ mod tests {
     #[test]
     fn import_replace_is_atomic_when_a_write_fails() {
         let (_d, db) = vault();
+        db.upsert_host(HostEntry {
+            id: "h1".into(),
+            name: "web".into(),
+            hostname: "10.0.0.5".into(),
+            port: 22,
+            group_id: "g1".into(),
+            credential_id: "c1".into(),
+            tags: vec![],
+            os: None,
+            inject_aliases: false,
+            notes: None,
+        })
+        .unwrap();
         let before = db.load_snapshot().unwrap();
-        assert!(
-            !before.hosts.is_empty(),
-            "seed data expected until onboarding lands"
-        );
+        assert_eq!(before.hosts.len(), 1);
 
         // Break the transaction midway by dropping a table the import needs.
         db.with_conn(|c| c.execute_batch("DROP TABLE aliases"))
@@ -738,5 +689,27 @@ mod tests {
             before.hosts.len(),
             "failed import must roll back the wipe"
         );
+    }
+
+    #[test]
+    fn fresh_vault_has_starter_content_but_no_hosts_or_credentials() {
+        let (_d, db) = vault();
+        let snap = db.load_snapshot().unwrap();
+        assert!(snap.hosts.is_empty());
+        assert!(snap.credentials.is_empty());
+        assert!(snap.groups.is_empty());
+        assert!(!snap.snippets.is_empty() && !snap.aliases.is_empty());
+    }
+
+    #[test]
+    fn starters_are_seeded_only_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = DatabaseManager::open(dir.path().to_path_buf(), [9u8; 32]).unwrap();
+        for s in db.load_snapshot().unwrap().snippets {
+            db.delete_snippet(&s.id).unwrap();
+        }
+        drop(db);
+        let reopened = DatabaseManager::open(dir.path().to_path_buf(), [9u8; 32]).unwrap();
+        assert!(reopened.load_snapshot().unwrap().snippets.is_empty());
     }
 }

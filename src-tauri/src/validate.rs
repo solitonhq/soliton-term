@@ -86,7 +86,10 @@ pub fn host(h: &HostEntry) -> Check {
         return Err("port must be between 1 and 65535".into());
     }
     id("host group id", &h.group_id)?;
-    id("host credential id", &h.credential_id)?;
+    // Empty = no stored credential (authenticate interactively / via ssh-agent).
+    if !h.credential_id.is_empty() {
+        id("host credential id", &h.credential_id)?;
+    }
     if h.tags.len() > MAX_TAGS {
         return Err(format!("a host can have at most {MAX_TAGS} tags"));
     }
@@ -170,6 +173,13 @@ mod tests {
         let mut h = good_host();
         h.hostname = "-oProxyCommand=evil".into();
         assert!(host(&h).is_err());
+    }
+
+    #[test]
+    fn host_without_credential_is_allowed() {
+        let mut h = good_host();
+        h.credential_id = String::new();
+        assert!(host(&h).is_ok());
     }
 
     #[test]

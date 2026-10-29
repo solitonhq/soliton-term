@@ -230,7 +230,7 @@ impl SshPtyManager {
             if !is_safe_ssh_hostname(&clean_host) {
                 return Err(format!("Invalid SSH hostname: '{}'", clean_host));
             }
-            if !is_safe_ssh_username(&clean_user) {
+            if !clean_user.is_empty() && !is_safe_ssh_username(&clean_user) {
                 return Err(format!("Invalid SSH username: '{}'", clean_user));
             }
             if port == 0 {
@@ -263,8 +263,11 @@ impl SshPtyManager {
             let mut c = CommandBuilder::new(ssh_bin);
             c.arg("-p");
             c.arg(port.to_string());
-            c.arg("-l");
-            c.arg(&clean_user);
+            // No stored username: let ssh pick the user (ssh_config / local user).
+            if !clean_user.is_empty() {
+                c.arg("-l");
+                c.arg(&clean_user);
+            }
             c.arg("-o");
             c.arg("StrictHostKeyChecking=accept-new");
             c.arg("-o");
