@@ -1,3 +1,4 @@
+use crate::vault_key;
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
@@ -81,90 +82,80 @@ pub struct DatabaseManager {
 }
 
 impl DatabaseManager {
-    pub fn new(app_dir: PathBuf) -> SqlResult<Self> {
-        fs::create_dir_all(&app_dir).ok();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&app_dir, fs::Permissions::from_mode(0o700));
-        }
+    /// Opens the vault in `app_dir`, fetching the master key from the Keychain
+    /// (migrating the legacy key file on first run).
+    pub fn new(app_dir: PathBuf) -> Result<Self, String> {
+        Self::prepare_dir(&app_dir)?;
+        let key = vault_key::load_or_create_key(&app_dir, &vault_key::KeychainBackend::default())?;
+        Self::open(app_dir, key)
+    }
+
+    /// Opens the vault with an explicit key. Used by `new` and by tests.
+    pub fn open(app_dir: PathBuf, key_bytes: [u8; 32]) -> Result<Self, String> {
+        Self::prepare_dir(&app_dir)?;
         let db_path = app_dir.join("soliton_vault.sqlite3");
-        let key_path = app_dir.join(".vault_master.key");
-
-        let key_bytes: [u8; 32] = if key_path.exists() {
-            let bytes = fs::read(&key_path).unwrap_or_default();
-            if bytes.len() == 32 {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let _ = fs::set_permissions(&key_path, fs::Permissions::from_mode(0o600));
-                }
-                let mut arr = [0u8; 32];
-                arr.copy_from_slice(&bytes);
-                arr
-            } else {
-                Self::generate_and_save_key(&key_path)
-            }
-        } else {
-            Self::generate_and_save_key(&key_path)
-        };
-
-        let cipher = Aes256Gcm::new(&key_bytes.into());
-        let conn = Connection::open(&db_path)?;
+        let conn = Connection::open(&db_path).map_err(|e| format!("Failed to open vault: {e}"))?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&db_path, fs::Permissions::from_mode(0o600));
+            fs::set_permissions(&db_path, fs::Permissions::from_mode(0o600))
+                .map_err(|e| format!("Failed to restrict vault permissions: {e}"))?;
         }
 
         let manager = Self {
             conn: Mutex::new(conn),
-            cipher,
+            cipher: Aes256Gcm::new(&key_bytes.into()),
         };
-        manager.init_schema()?;
-        manager.seed_if_empty()?;
+        manager.init_schema().map_err(|e| e.to_string())?;
+        manager.seed_if_empty().map_err(|e| e.to_string())?;
         Ok(manager)
     }
 
-    fn generate_and_save_key(key_path: &PathBuf) -> [u8; 32] {
-        let mut key = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut key);
-        fs::write(key_path, &key).ok();
+    fn prepare_dir(app_dir: &PathBuf) -> Result<(), String> {
+        fs::create_dir_all(app_dir).map_err(|e| format!("Failed to create data dir: {e}"))?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(key_path, fs::Permissions::from_mode(0o600));
+            fs::set_permissions(app_dir, fs::Permissions::from_mode(0o700))
+                .map_err(|e| format!("Failed to restrict data dir permissions: {e}"))?;
         }
-        key
+        Ok(())
     }
 
-    pub fn encrypt_secret(&self, plaintext: &str) -> String {
+    pub fn encrypt_secret(&self, plaintext: &str) -> Result<String, String> {
+        if plaintext.is_empty() {
+            return Ok(String::new());
+        }
         let mut nonce_bytes = [0u8; 12];
         rand::thread_rng().fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
-        match self.cipher.encrypt(nonce, plaintext.as_bytes()) {
-            Ok(ciphertext) => {
-                let mut combined = nonce_bytes.to_vec();
-                combined.extend_from_slice(&ciphertext);
-                BASE64.encode(combined)
-            }
-            Err(_) => String::new(),
-        }
+        let ciphertext = self
+            .cipher
+            .encrypt(Nonce::from_slice(&nonce_bytes), plaintext.as_bytes())
+            .map_err(|_| "Failed to encrypt credential".to_string())?;
+        let mut combined = nonce_bytes.to_vec();
+        combined.extend_from_slice(&ciphertext);
+        Ok(BASE64.encode(combined))
     }
 
-    pub fn decrypt_secret(&self, encoded: &str) -> String {
-        if let Ok(combined) = BASE64.decode(encoded) {
-            if combined.len() > 12 {
-                let (nonce_bytes, ciphertext) = combined.split_at(12);
-                let nonce = Nonce::from_slice(nonce_bytes);
-                if let Ok(plain) = self.cipher.decrypt(nonce, ciphertext) {
-                    if let Ok(s) = String::from_utf8(plain) {
-                        return s;
-                    }
-                }
-            }
+    /// Fails loudly instead of handing the ciphertext back as if it were the secret.
+    pub fn decrypt_secret(&self, encoded: &str) -> Result<String, String> {
+        if encoded.is_empty() {
+            return Ok(String::new());
         }
-        encoded.to_string()
+        let combined = BASE64
+            .decode(encoded)
+            .map_err(|_| "Credential ciphertext is not valid base64".to_string())?;
+        if combined.len() <= 12 {
+            return Err("Credential ciphertext is truncated".into());
+        }
+        let (nonce_bytes, ciphertext) = combined.split_at(12);
+        let plain = self
+            .cipher
+            .decrypt(Nonce::from_slice(nonce_bytes), ciphertext)
+            .map_err(|_| {
+                "Credential could not be decrypted (wrong key or corrupted data)".to_string()
+            })?;
+        String::from_utf8(plain).map_err(|_| "Credential is not valid UTF-8".to_string())
     }
 
     fn init_schema(&self) -> SqlResult<()> {
@@ -270,7 +261,9 @@ impl DatabaseManager {
             username: "root".into(),
             secret_type: "password".into(),
             secret_value: "<DEMO_ROOT_PASSWORD_CHANGE_ME>".into(),
-            description: Some("Primary production root access credential (Demo placeholder)".into()),
+            description: Some(
+                "Primary production root access credential (Demo placeholder)".into(),
+            ),
         })?;
         self.upsert_credential(CredentialItem {
             id: "cred-devops".into(),
@@ -278,7 +271,9 @@ impl DatabaseManager {
             username: "soliton_ops".into(),
             secret_type: "password".into(),
             secret_value: "<DEMO_OPS_PASSWORD_CHANGE_ME>".into(),
-            description: Some("Standard SRE & Kubernetes operator account (Demo placeholder)".into()),
+            description: Some(
+                "Standard SRE & Kubernetes operator account (Demo placeholder)".into(),
+            ),
         })?;
         self.upsert_credential(CredentialItem {
             id: "cred-db-admin".into(),
@@ -399,7 +394,10 @@ impl DatabaseManager {
                     name: r.get(1)?,
                     username: r.get(2)?,
                     secret_type: r.get(3)?,
-                    secret_value: self.decrypt_secret(&cipher_str),
+                    secret_value: self.decrypt_secret(&cipher_str).unwrap_or_else(|e| {
+                        eprintln!("vault: credential left blank: {e}");
+                        String::new()
+                    }),
                     description: r.get(5)?,
                 })
             })?
@@ -470,18 +468,6 @@ impl DatabaseManager {
         })
     }
 
-    pub fn upsert_group(&self, item: HostGroup) -> SqlResult<()> {
-        let conn = self
-            .conn
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        conn.execute(
-            "INSERT OR REPLACE INTO groups (id, name, parent_id, icon) VALUES (?1, ?2, ?3, ?4)",
-            params![item.id, item.name, item.parent_id, item.icon],
-        )?;
-        Ok(())
-    }
-
     pub fn delete_group(&self, id: &str) -> SqlResult<()> {
         let conn = self
             .conn
@@ -495,58 +481,12 @@ impl DatabaseManager {
         Ok(())
     }
 
-    pub fn upsert_credential(&self, item: CredentialItem) -> SqlResult<()> {
-        let encrypted = self.encrypt_secret(&item.secret_value);
-        let conn = self
-            .conn
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        conn.execute(
-            "INSERT OR REPLACE INTO credentials (id, name, username, secret_type, secret_cipher, description)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                item.id,
-                item.name,
-                item.username,
-                item.secret_type,
-                encrypted,
-                item.description
-            ],
-        )?;
-        Ok(())
-    }
-
     pub fn delete_credential(&self, id: &str) -> SqlResult<()> {
         let conn = self
             .conn
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         conn.execute("DELETE FROM credentials WHERE id = ?1", params![id])?;
-        Ok(())
-    }
-
-    pub fn upsert_host(&self, item: HostEntry) -> SqlResult<()> {
-        let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".into());
-        let conn = self
-            .conn
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        conn.execute(
-            "INSERT OR REPLACE INTO hosts (id, name, hostname, port, group_id, credential_id, tags_json, os, inject_aliases, notes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            params![
-                item.id,
-                item.name,
-                item.hostname,
-                item.port,
-                item.group_id,
-                item.credential_id,
-                tags_json,
-                item.os,
-                if item.inject_aliases { 1 } else { 0 },
-                item.notes
-            ],
-        )?;
         Ok(())
     }
 
@@ -559,42 +499,12 @@ impl DatabaseManager {
         Ok(())
     }
 
-    pub fn upsert_snippet(&self, item: SnippetItem) -> SqlResult<()> {
-        let conn = self
-            .conn
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        conn.execute(
-            "INSERT OR REPLACE INTO snippets (id, name, command, category, description) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![item.id, item.name, item.command, item.category, item.description],
-        )?;
-        Ok(())
-    }
-
     pub fn delete_snippet(&self, id: &str) -> SqlResult<()> {
         let conn = self
             .conn
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         conn.execute("DELETE FROM snippets WHERE id = ?1", params![id])?;
-        Ok(())
-    }
-
-    pub fn upsert_alias(&self, item: AliasItem) -> SqlResult<()> {
-        let conn = self
-            .conn
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        conn.execute(
-            "INSERT OR REPLACE INTO aliases (id, alias, command, description, enabled) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                item.id,
-                item.alias,
-                item.command,
-                item.description,
-                if item.enabled { 1 } else { 0 }
-            ],
-        )?;
         Ok(())
     }
 
@@ -607,31 +517,226 @@ impl DatabaseManager {
         Ok(())
     }
 
-    pub fn import_snapshot(&self, snapshot: VaultSnapshot, replace_existing: bool) -> SqlResult<()> {
-        if replace_existing {
-            let conn = self
-                .conn
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            conn.execute_batch(
-                "DELETE FROM groups; DELETE FROM credentials; DELETE FROM hosts; DELETE FROM snippets; DELETE FROM aliases;",
-            )?;
-        }
-        for g in snapshot.groups {
-            self.upsert_group(g)?;
-        }
-        for c in snapshot.credentials {
-            self.upsert_credential(c)?;
-        }
-        for h in snapshot.hosts {
-            self.upsert_host(h)?;
-        }
-        for s in snapshot.snippets {
-            self.upsert_snippet(s)?;
-        }
-        for a in snapshot.aliases {
-            self.upsert_alias(a)?;
-        }
-        Ok(())
+    fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> SqlResult<T>) -> SqlResult<T> {
+        let conn = self
+            .conn
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        f(&conn)
+    }
+
+    fn encrypt_for_sql(&self, secret: &str) -> SqlResult<String> {
+        self.encrypt_secret(secret)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))
+    }
+
+    pub fn upsert_group(&self, item: HostGroup) -> SqlResult<()> {
+        self.with_conn(|c| write_group(c, &item))
+    }
+
+    pub fn upsert_credential(&self, item: CredentialItem) -> SqlResult<()> {
+        let encrypted = self.encrypt_for_sql(&item.secret_value)?;
+        self.with_conn(|c| write_credential(c, &item, &encrypted))
+    }
+
+    pub fn upsert_host(&self, item: HostEntry) -> SqlResult<()> {
+        self.with_conn(|c| write_host(c, &item))
+    }
+
+    pub fn upsert_snippet(&self, item: SnippetItem) -> SqlResult<()> {
+        self.with_conn(|c| write_snippet(c, &item))
+    }
+
+    pub fn upsert_alias(&self, item: AliasItem) -> SqlResult<()> {
+        self.with_conn(|c| write_alias(c, &item))
+    }
+
+    /// All-or-nothing: encrypts everything first, then applies the bundle in a
+    /// single transaction so a failure can never leave a half-replaced vault.
+    pub fn import_snapshot(
+        &self,
+        snapshot: VaultSnapshot,
+        replace_existing: bool,
+    ) -> SqlResult<()> {
+        let encrypted: Vec<String> = snapshot
+            .credentials
+            .iter()
+            .map(|c| self.encrypt_for_sql(&c.secret_value))
+            .collect::<SqlResult<_>>()?;
+
+        self.with_conn(|conn| {
+            let tx = conn.unchecked_transaction()?;
+            if replace_existing {
+                tx.execute_batch(
+                    "DELETE FROM groups; DELETE FROM credentials; DELETE FROM hosts; DELETE FROM snippets; DELETE FROM aliases;",
+                )?;
+            }
+            for g in &snapshot.groups {
+                write_group(&tx, g)?;
+            }
+            for (c, enc) in snapshot.credentials.iter().zip(&encrypted) {
+                write_credential(&tx, c, enc)?;
+            }
+            for h in &snapshot.hosts {
+                write_host(&tx, h)?;
+            }
+            for s in &snapshot.snippets {
+                write_snippet(&tx, s)?;
+            }
+            for a in &snapshot.aliases {
+                write_alias(&tx, a)?;
+            }
+            tx.commit()
+        })
+    }
+}
+
+fn write_group(conn: &Connection, item: &HostGroup) -> SqlResult<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO groups (id, name, parent_id, icon) VALUES (?1, ?2, ?3, ?4)",
+        params![item.id, item.name, item.parent_id, item.icon],
+    )
+    .map(|_| ())
+}
+
+fn write_credential(conn: &Connection, item: &CredentialItem, encrypted: &str) -> SqlResult<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO credentials (id, name, username, secret_type, secret_cipher, description)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            item.id,
+            item.name,
+            item.username,
+            item.secret_type,
+            encrypted,
+            item.description
+        ],
+    )
+    .map(|_| ())
+}
+
+fn write_host(conn: &Connection, item: &HostEntry) -> SqlResult<()> {
+    let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".into());
+    conn.execute(
+        "INSERT OR REPLACE INTO hosts (id, name, hostname, port, group_id, credential_id, tags_json, os, inject_aliases, notes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            item.id,
+            item.name,
+            item.hostname,
+            item.port,
+            item.group_id,
+            item.credential_id,
+            tags_json,
+            item.os,
+            if item.inject_aliases { 1 } else { 0 },
+            item.notes
+        ],
+    )
+    .map(|_| ())
+}
+
+fn write_snippet(conn: &Connection, item: &SnippetItem) -> SqlResult<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO snippets (id, name, command, category, description) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![item.id, item.name, item.command, item.category, item.description],
+    )
+    .map(|_| ())
+}
+
+fn write_alias(conn: &Connection, item: &AliasItem) -> SqlResult<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO aliases (id, alias, command, description, enabled) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            item.id,
+            item.alias,
+            item.command,
+            item.description,
+            if item.enabled { 1 } else { 0 }
+        ],
+    )
+    .map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vault() -> (tempfile::TempDir, DatabaseManager) {
+        let dir = tempfile::tempdir().unwrap();
+        let db = DatabaseManager::open(dir.path().to_path_buf(), [9u8; 32]).unwrap();
+        (dir, db)
+    }
+
+    #[test]
+    fn secrets_round_trip_and_are_not_stored_in_plaintext() {
+        let (_d, db) = vault();
+        let enc = db.encrypt_secret("hunter2").unwrap();
+        assert!(!enc.contains("hunter2"));
+        assert_eq!(db.decrypt_secret(&enc).unwrap(), "hunter2");
+    }
+
+    #[test]
+    fn nonces_are_unique_per_encryption() {
+        let (_d, db) = vault();
+        assert_ne!(
+            db.encrypt_secret("x").unwrap(),
+            db.encrypt_secret("x").unwrap()
+        );
+    }
+
+    #[test]
+    fn wrong_key_fails_instead_of_returning_ciphertext() {
+        let (_d, db) = vault();
+        let enc = db.encrypt_secret("hunter2").unwrap();
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = DatabaseManager::open(other_dir.path().to_path_buf(), [1u8; 32]).unwrap();
+        assert!(other.decrypt_secret(&enc).is_err());
+    }
+
+    #[test]
+    fn tampered_ciphertext_is_rejected() {
+        let (_d, db) = vault();
+        let enc = db.encrypt_secret("hunter2").unwrap();
+        let mut raw = BASE64.decode(enc).unwrap();
+        let last = raw.len() - 1;
+        raw[last] ^= 0x01;
+        assert!(db.decrypt_secret(&BASE64.encode(raw)).is_err());
+    }
+
+    #[test]
+    fn import_replace_is_atomic_when_a_write_fails() {
+        let (_d, db) = vault();
+        let before = db.load_snapshot().unwrap();
+        assert!(
+            !before.hosts.is_empty(),
+            "seed data expected until onboarding lands"
+        );
+
+        // Break the transaction midway by dropping a table the import needs.
+        db.with_conn(|c| c.execute_batch("DROP TABLE aliases"))
+            .unwrap();
+        let snap = VaultSnapshot {
+            groups: vec![],
+            credentials: vec![],
+            hosts: vec![],
+            snippets: vec![],
+            aliases: vec![AliasItem {
+                id: "a".into(),
+                alias: "ll".into(),
+                command: "ls".into(),
+                description: String::new(),
+                enabled: true,
+            }],
+        };
+        assert!(db.import_snapshot(snap, true).is_err());
+        let hosts_after: i64 = db
+            .with_conn(|c| c.query_row("SELECT COUNT(*) FROM hosts", [], |r| r.get(0)))
+            .unwrap();
+        assert_eq!(
+            hosts_after as usize,
+            before.hosts.len(),
+            "failed import must roll back the wipe"
+        );
     }
 }
