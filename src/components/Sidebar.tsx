@@ -66,13 +66,7 @@ export const Sidebar: React.FC = () => {
     triggerSnippetExecution,
   } = useAppStore();
 
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    "grp-prod": true,
-    "grp-prod-k8s": true,
-    "grp-prod-db": true,
-    "grp-stage": true,
-    "grp-dmz": true,
-  });
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [addMenuGroupId, setAddMenuGroupId] = useState<string | null>(null);
@@ -208,7 +202,7 @@ export const Sidebar: React.FC = () => {
   }
 
   const toggleGroup = (id: string) => {
-    setExpandedGroups((prev) => ({ ...prev, [id]: !prev[id] }));
+    setExpandedGroups((prev) => ({ ...prev, [id]: prev[id] === false }));
   };
 
   const handleCopyText = async (key: string, text: string) => {
@@ -366,7 +360,7 @@ export const Sidebar: React.FC = () => {
     return groups
       .filter((g) => g.parentId === parentId)
       .map((group: HostGroup) => {
-        const isExpanded = !!expandedGroups[group.id];
+        const isExpanded = expandedGroups[group.id] !== false;
         const childGroups = groups.filter((g) => g.parentId === group.id);
         const groupHosts = hosts.filter(
           (h) => h.groupId === group.id && matchesFilter(h)

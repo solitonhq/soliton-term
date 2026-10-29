@@ -52,6 +52,8 @@ export const TerminalWorkspace: React.FC = () => {
     lastDispatchedCommand,
     openHostSession,
     openLocalTerminal,
+    setActiveModal,
+    setImportExportModalOpen,
   } = useAppStore();
 
   const [broadcastInput, setBroadcastInput] = useState("");
@@ -80,6 +82,7 @@ export const TerminalWorkspace: React.FC = () => {
       const entry = terminalsRef.current[event.payload.tabId];
       if (entry) {
         entry.term.write(event.payload.data);
+        useAppStore.getState().setTabStatus(event.payload.tabId, "connected");
       }
     }).then((fn) => {
       unlistenOut = fn;
@@ -88,10 +91,12 @@ export const TerminalWorkspace: React.FC = () => {
     listen<{ tabId: string; reason: string }>("pty-exit", (event) => {
       const entry = terminalsRef.current[event.payload.tabId];
       if (entry) {
+        entry.isPtyLive = false;
         entry.term.writeln(
           `\r\n\x1b[1;31m[Disconnected: ${event.payload.reason}]\x1b[0m`
         );
       }
+      useAppStore.getState().setTabStatus(event.payload.tabId, "disconnected");
     }).then((fn) => {
       unlistenExit = fn;
     });
@@ -108,7 +113,7 @@ export const TerminalWorkspace: React.FC = () => {
       if (container && !terminalsRef.current[tab.id]) {
         const host = hosts.find((h) => h.id === tab.hostId);
         const cred = credentials.find((c) => c.id === host?.credentialId);
-        const username = cred?.username || "root";
+        const username = cred?.username || "";
         const port = host?.port || 22;
 
         const secretType = cred?.secretType || "password";
@@ -149,7 +154,7 @@ export const TerminalWorkspace: React.FC = () => {
           term.writeln(`\x1b[90mLaunching local shell (${tab.hostname})...\x1b[0m`);
         } else {
           term.writeln(
-            `\x1b[90mConnecting to ${username}@${tab.hostname}:${port}...\x1b[0m`
+            `\x1b[90mConnecting to ${username ? `${username}@` : ""}${tab.hostname}:${port}...\x1b[0m`
           );
         }
 
@@ -173,6 +178,7 @@ export const TerminalWorkspace: React.FC = () => {
             initialAliases: tab.aliasesInjected ? enabledAliases : [],
           }).catch((err) => {
             instanceRecord.isPtyLive = false;
+            useAppStore.getState().setTabStatus(tab.id, "disconnected");
             term.writeln(
               `\r\n\x1b[1;31m[SSH Connection Error] ${String(err)}\x1b[0m`
             );
@@ -342,6 +348,16 @@ export const TerminalWorkspace: React.FC = () => {
                 ) : (
                   <TerminalIcon className="w-3.5 h-3.5 text-app-muted" />
                 )}
+                <span
+                  title={tab.status}
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    tab.status === "connected"
+                      ? "bg-app-success"
+                      : tab.status === "connecting"
+                        ? "bg-amber-400 animate-pulse"
+                        : "bg-red-500"
+                  }`}
+                />
                 <span className="truncate max-w-[140px]">{tab.title}</span>
                 <button
                   onClick={(e) => {
@@ -551,9 +567,43 @@ export const TerminalWorkspace: React.FC = () => {
               className="h-4 w-auto object-contain mb-2 opacity-75"
               draggable={false}
             />
-            <p className="text-xs text-zinc-500 mt-1">
-              Select a server from the sidebar to connect
-            </p>
+            {hosts.length === 0 ? (
+              <div className="mt-3 flex flex-col items-center gap-3">
+                <p className="text-xs text-zinc-500">
+                  Your vault is empty. Add a server to get started.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal({ type: "host" })}
+                    className="px-3 py-1.5 rounded-lg bg-app-accent text-black text-xs font-medium hover:opacity-90 transition-opacity"
+                  >
+                    Add your first server
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openLocalTerminal}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800/60 transition-colors"
+                  >
+                    Open local terminal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportExportModalOpen(true)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800/60 transition-colors"
+                  >
+                    Import workspace
+                  </button>
+                </div>
+                <p className="text-[11px] text-zinc-600">
+                  Tip: press <kbd className="font-mono">⌘K</kbd> to search, run snippets or switch themes
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-zinc-500 mt-1">
+                Select a server from the sidebar to connect
+              </p>
+            )}
           </div>
         ) : (
           <div

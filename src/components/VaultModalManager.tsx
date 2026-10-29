@@ -79,8 +79,8 @@ export const VaultModalManager: React.FC = () => {
       setGroupId(
         h?.groupId || activeModal.defaultGroupId || groups[0]?.id || ""
       );
-      setCredentialId(h?.credentialId || credentials[0]?.id || "");
-      setTagsInput(h ? h.tags.join(", ") : "prod, linux");
+      setCredentialId(h ? h.credentialId : credentials[0]?.id || "");
+      setTagsInput(h ? h.tags.join(", ") : "");
       setInjectAliases(h ? h.injectAliases : true);
       setNotes(h?.notes || "");
     } else if (activeModal.type === "group") {
@@ -128,8 +128,8 @@ export const VaultModalManager: React.FC = () => {
       name: hostName.trim(),
       hostname: hostname.trim(),
       port: Number(port) || 22,
-      groupId: groupId || groups[0]?.id || "grp-prod",
-      credentialId: credentialId || credentials[0]?.id || "cred-root-prod",
+      groupId: groupId || groups[0]?.id || "",
+      credentialId,
       tags,
       os: "linux",
       injectAliases,
@@ -409,6 +409,9 @@ export const VaultModalManager: React.FC = () => {
                   onChange={(e) => setCredentialId(e.target.value)}
                   className="w-full bg-app-bg border border-app-border rounded-lg px-3 py-2 text-app-text focus:outline-none focus:border-app-accent"
                 >
+                  <option value="" className="bg-slate-900 text-white">
+                    None — enter password in terminal
+                  </option>
                   {credentials.map((c) => (
                     <option key={c.id} value={c.id} className="bg-slate-900 text-white">
                       🔑 {c.name} ({c.username})
