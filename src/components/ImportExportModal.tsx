@@ -75,8 +75,14 @@ export const ImportExportModal: React.FC = () => {
     try {
       await importVaultBundle(importText, replaceExisting);
       setImportText("");
-    } catch {
-      setErrorMsg("Invalid JSON format. Please check the Soliton Term export bundle.");
+    } catch (err) {
+      setErrorMsg(
+        err instanceof SyntaxError
+          ? "Invalid JSON format. Please check the Soliton Term export bundle."
+          : err instanceof Error
+            ? err.message
+            : "Import failed."
+      );
     }
   };
 

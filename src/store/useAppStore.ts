@@ -73,7 +73,15 @@ export type ConfirmModalType =
   | { type: "delete-group"; group: HostGroup }
   | { type: "duplicate-host"; host: HostEntry };
 
+export interface Notice {
+  id: number;
+  kind: "error" | "info";
+  message: string;
+}
+
 interface AppState {
+  notice: Notice | null;
+  dismissNotice: () => void;
   appTheme: AppTheme;
   terminalThemeId: string;
   terminalFontSize: number;
@@ -152,18 +160,43 @@ interface AppState {
   setActiveTabId: (tabId: string) => void;
 }
 
+const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+/** Fire-and-forget IPC for non-critical calls; never throws. */
 const safeInvoke = async <T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> => {
   try {
-    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-      return await invoke<T>(cmd, args);
-    }
+    if (inTauri()) return await invoke<T>(cmd, args);
   } catch (err) {
-    console.warn(`Tauri IPC [${cmd}] fallback:`, err);
+    console.warn(`Tauri IPC [${cmd}] failed:`, err);
   }
   return null;
 };
 
-export const useAppStore = create<AppState>((set, get) => ({
+/** Strict IPC: rejects with the backend's message so callers can surface it. */
+const strictInvoke = async <T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> => {
+  if (!inTauri()) return null;
+  try {
+    return await invoke<T>(cmd, args);
+  } catch (err) {
+    throw new Error(typeof err === "string" ? err : (err as Error)?.message ?? String(err));
+  }
+};
+
+export const useAppStore = create<AppState>((set, get) => {
+  /** Persists to the vault; on failure shows the reason and tells the caller to abort. */
+  const persist = async (cmd: string, args: Record<string, unknown>): Promise<boolean> => {
+    try {
+      await strictInvoke(cmd, args);
+      return true;
+    } catch (err) {
+      set({ notice: { id: Date.now(), kind: "error", message: (err as Error).message } });
+      return false;
+    }
+  };
+
+  return {
+  notice: null,
+  dismissNotice: () => set({ notice: null }),
   appTheme: "dark-black",
   terminalThemeId: "oled-pitch",
   terminalFontSize: 13,
@@ -435,7 +468,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       aliases: Array.isArray(parsed.aliases) ? parsed.aliases : [],
     };
 
-    const backendResult = await safeInvoke<{
+    const backendResult = await strictInvoke<{
       groups: HostGroup[];
       credentials: CredentialItem[];
       hosts: HostEntry[];
@@ -500,7 +533,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
 
   upsertGroup: async (item) => {
-    await safeInvoke("save_group", { item });
+    if (!(await persist("save_group", { item }))) return;
     set((state) => {
       const exists = state.groups.some((g) => g.id === item.id);
       return {
@@ -527,14 +560,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const updated: HostGroup = { ...group, parentId: targetParentId };
-    await safeInvoke("save_group", { item: updated });
+    if (!(await persist("save_group", { item: updated }))) return;
     set((state) => ({
       groups: state.groups.map((g) => (g.id === groupId ? updated : g)),
     }));
   },
 
   deleteGroup: async (id) => {
-    await safeInvoke("remove_group", { id });
+    if (!(await persist("remove_group", { id }))) return;
     set((state) => {
       const deletedGroup = state.groups.find((g) => g.id === id);
       const remainingGroups = state.groups
@@ -555,7 +588,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   upsertCredential: async (item) => {
-    await safeInvoke("save_credential", { item });
+    if (!(await persist("save_credential", { item }))) return;
     set((state) => {
       const exists = state.credentials.some((c) => c.id === item.id);
       return {
@@ -568,14 +601,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteCredential: async (id) => {
-    await safeInvoke("remove_credential", { id });
+    if (!(await persist("remove_credential", { id }))) return;
     set((state) => ({
       credentials: state.credentials.filter((c) => c.id !== id),
     }));
   },
 
   upsertHost: async (item) => {
-    await safeInvoke("save_host", { item });
+    if (!(await persist("save_host", { item }))) return;
     set((state) => {
       const exists = state.hosts.some((h) => h.id === item.id);
       return {
@@ -600,7 +633,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       tags: [...original.tags],
     };
 
-    await safeInvoke("save_host", { item: duplicated });
+    if (!(await persist("save_host", { item: duplicated }))) return;
     set((state) => {
       const idx = state.hosts.findIndex((h) => h.id === hostId);
       const nextHosts = [...state.hosts];
@@ -620,14 +653,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     const host = get().hosts.find((h) => h.id === hostId);
     if (!host || host.groupId === targetGroupId) return;
     const updated: HostEntry = { ...host, groupId: targetGroupId };
-    await safeInvoke("save_host", { item: updated });
+    if (!(await persist("save_host", { item: updated }))) return;
     set((state) => ({
       hosts: state.hosts.map((h) => (h.id === hostId ? updated : h)),
     }));
   },
 
   deleteHost: async (id) => {
-    await safeInvoke("remove_host", { id });
+    if (!(await persist("remove_host", { id }))) return;
     set((state) => {
       const remaining = state.hosts.filter((h) => h.id !== id);
       return {
@@ -640,7 +673,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   upsertSnippet: async (item) => {
-    await safeInvoke("save_snippet", { item });
+    if (!(await persist("save_snippet", { item }))) return;
     set((state) => {
       const exists = state.snippets.some((s) => s.id === item.id);
       return {
@@ -653,14 +686,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteSnippet: async (id) => {
-    await safeInvoke("remove_snippet", { id });
+    if (!(await persist("remove_snippet", { id }))) return;
     set((state) => ({
       snippets: state.snippets.filter((s) => s.id !== id),
     }));
   },
 
   upsertAlias: async (item) => {
-    await safeInvoke("save_alias", { item });
+    if (!(await persist("save_alias", { item }))) return;
     set((state) => {
       const exists = state.aliases.some((a) => a.id === item.id);
       return {
@@ -673,7 +706,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteAlias: async (id) => {
-    await safeInvoke("remove_alias", { id });
+    if (!(await persist("remove_alias", { id }))) return;
     set((state) => ({
       aliases: state.aliases.filter((a) => a.id !== id),
     }));
@@ -798,4 +831,5 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedHostId: tab ? tab.hostId : get().selectedHostId,
     });
   },
-}));
+  };
+});

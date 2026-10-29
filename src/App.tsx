@@ -6,6 +6,7 @@ import { VaultModalManager } from "./components/VaultModalManager";
 import { ParametricSnippetRunnerModal } from "./components/ParametricSnippetRunnerModal";
 import { CommandPaletteModal } from "./components/CommandPaletteModal";
 import { ImportExportModal } from "./components/ImportExportModal";
+import { NoticeToast } from "./components/NoticeToast";
 import { useAppStore } from "./store/useAppStore";
 
 export const App: React.FC = () => {
@@ -52,6 +53,8 @@ export const App: React.FC = () => {
 
       {/* Full Export / Import Sharing Modal */}
       <ImportExportModal />
+
+      <NoticeToast />
     </div>
   );
 };
