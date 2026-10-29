@@ -91,6 +91,19 @@ To build and run Soliton Term locally on macOS, ensure you have the following in
 
 ---
 
+## Running the Checks
+
+CI runs the same commands; please run them before opening a pull request:
+
+```bash
+npm run typecheck && npm test
+cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+```
+
+The real-Keychain test is opt-in: `cargo test -- --ignored real_keychain`.
+
+---
+
 ## Project Structure
 
 ```text

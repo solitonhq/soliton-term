@@ -18,9 +18,10 @@
 *Combining the modern terminal UX of **Termius** with the enterprise Vault & folder hierarchy of **Remote Desktop Manager (RDM)**.*
 
 [![Built with Tauri v2](https://img.shields.io/badge/Tauri-v2.2-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://v2.tauri.app/)
-[![Rust Backend](https://img.shields.io/badge/Rust-1.99+-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Rust Backend](https://img.shields.io/badge/Rust-stable-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![React 18](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
-[![Security: AES-256-GCM](https://img.shields.io/badge/Vault-AES--256--GCM-10B981?style=for-the-badge)](./SECURITY.md)
+[![Security: AES-256-GCM](https://img.shields.io/badge/Vault-AES--256--GCM%20%2B%20Keychain-10B981?style=for-the-badge)](./SECURITY.md)
+[![CI](https://img.shields.io/github/actions/workflow/status/solitonhq/soliton-term/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/solitonhq/soliton-term/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-38BDF8?style=for-the-badge)](./LICENSE)
 
 </div>
@@ -41,7 +42,7 @@
 | 🌈 **11+ Terminal Palettes** | Built-in schemes including *Soliton Cyber, Termius Dark, Dracula, Tokyo Night, OLED Pitch, Catppuccin Mocha, Nord Polar, Monokai Pro, Matrix Hacker, Solarized Light*, and *Clean Light*. |
 | 🔐 **RDM-Style Quick Copy Bar** | Top navigation panel detects the active server's linked Vault Credential and provides one-click **`Copy Username`**, **`Copy Password`**, and **`Copy IP:Port`** buttons. |
 | 📁 **Drag & Drop Folder Tree & Recent Sessions** | Add servers directly under nested folders, reorganize servers via **Drag & Drop**, resize or collapse the sidebar, and quickly reconnect to your **Last 5 Recent Sessions**. |
-| 🛡️ **AES-256-GCM Encrypted SQLite Vault** | Reusable credential pool (Passwords & Ed25519/RSA SSH Keys) encrypted at rest with **AES-256-GCM** inside a local SQLite database (`soliton_vault.sqlite3`). |
+| 🛡️ **Keychain-Backed Encrypted Vault** | Reusable credential pool (Passwords & Ed25519/RSA SSH Keys) encrypted at rest with **AES-256-GCM** in a local SQLite database. The master key lives in the **macOS Keychain**, never on disk. See [`SECURITY.md`](./SECURITY.md). |
 | 🔄 **Full Workspace Export & Import** | Export all your servers, folders, credentials (optional), snippets, and aliases to a `.json` bundle to back up or share with teammates, and import shared bundles in one click. |
 | 📡 **Selective Multi-Execution (Broadcast)** | Execute commands across all open SSH tabs or a cherry-picked subset of servers simultaneously in a synchronized split-grid view. Batch-open entire folders with one click. |
 | 📜 **Parametric Snippet Pool** | Store reusable diagnostic and operational scripts. Dynamic placeholders like `{{namespace}}`, `{{service_name}}`, or `{{port}}` automatically prompt for values before execution. |
@@ -50,27 +51,16 @@
 
 ---
 
-## 💿 macOS `.dmg` & `.app` Installation Guide
+## 💿 Install
 
-### Option 1: Install from the Pre-Built `.dmg` Installer
-1. Locate the generated DMG installer at:
-   ```text
-   src-tauri/target/release/bundle/dmg/Soliton Term_0.1.0_aarch64.dmg
-   ```
-2. Double-click **`Soliton Term_0.1.0_aarch64.dmg`** to mount the disk image.
-3. Drag **`Soliton Term.app`** into your **`Applications`** folder.
-4. *(First Launch on macOS)* Because the binary is locally built without an Apple Developer notarization certificate, clear the quarantine attribute if macOS Gatekeeper prompts you:
+1. Download the latest `Soliton Term_<version>_aarch64.dmg` (Apple Silicon) or `_x64.dmg` (Intel) from the [**Releases**](https://github.com/solitonhq/soliton-term/releases) page.
+2. Open the DMG and drag **Soliton Term** into **Applications**.
+3. *(Unsigned builds only)* If macOS Gatekeeper blocks the first launch, clear the quarantine flag:
    ```bash
    xattr -cr "/Applications/Soliton Term.app"
    ```
-5. Click the **Soliton Term** icon in **Launchpad**, **Applications**, or **Spotlight** to launch!
 
-### Option 2: Direct CLI Copy to `/Applications`
-```bash
-cp -R "src-tauri/target/release/bundle/macos/Soliton Term.app" "/Applications/Soliton Term.app"
-xattr -cr "/Applications/Soliton Term.app"
-open -a "Soliton Term"
-```
+On first launch your vault is empty: add a server, open a local terminal, or import a workspace bundle. If you used an earlier build, its master key is moved into the Keychain automatically (macOS may ask permission once).
 
 ---
 
@@ -79,7 +69,7 @@ open -a "Soliton Term"
 ### Prerequisites
 - **macOS** (Apple Silicon M1/M2/M3/M4 or Intel)
 - **Node.js** `v20+`
-- **Rust** `1.80+` (`rustup default stable`)
+- **Rust** stable (`rustup default stable`)
 
 ### 1. Clone & Install Dependencies
 ```bash
@@ -97,13 +87,19 @@ npm run tauri dev
 npm run dev
 ```
 
-### 3. Build Production macOS `.app` & `.dmg` Installer
+### 3. Run the Checks
+```bash
+npm run typecheck && npm test          # frontend
+cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+```
+
+### 4. Build Production macOS `.app` & `.dmg` Installer
 ```bash
 npm run tauri build
 ```
 This produces:
 - **macOS Application Bundle:** `src-tauri/target/release/bundle/macos/Soliton Term.app`
-- **macOS DMG Disk Image:** `src-tauri/target/release/bundle/dmg/Soliton Term_0.1.0_aarch64.dmg`
+- **macOS DMG Disk Image:** `src-tauri/target/release/bundle/dmg/Soliton Term_<version>_<arch>.dmg`
 
 ---
 
@@ -121,7 +117,7 @@ flowchart TD
     subgraph Backend["Backend Core (Rust + Tauri v2)"]
         IPC["Tauri IPC Commands & Real-Time Event Emitter"]
         PTY["PTY & OpenSSH Session Pool (portable-pty)"]
-        Vault["SQLite + AES-256-GCM Encrypted Vault (rusqlite + aes-gcm)"]
+        Vault["SQLite + AES-256-GCM Vault, master key in macOS Keychain (rusqlite + aes-gcm + keyring)"]
     end
 
     Frontend <-->|"Low-Latency Event Stream"| IPC
@@ -137,12 +133,24 @@ flowchart TD
 When managing shared production servers, modifying `~/.bashrc` or `~/.zshrc` with personal aliases is bad practice. **Soliton Term** solves this by injecting your enabled aliases directly into the active PTY memory stream using a leading space and `HISTCONTROL=ignorespace`:
 
 ```bash
- export HISTCONTROL=ignorespace; alias ll='ls -lah --color=auto'; alias k='kubectl'; alias dcu='docker compose up -d'
+ export HISTCONTROL=ignorespace; alias ll='ls -lah'; alias k='kubectl'; alias dcu='docker compose up -d'
 ```
 
 - **Zero Disk Footprint:** Nothing is written to disk on the remote server.
 - **Clean History:** Because of `ignorespace`, the injection command itself is not recorded in `.bash_history`.
 - **Session Scoped:** As soon as you disconnect or close the tab, the aliases vanish cleanly.
+
+---
+
+## 🗺️ Roadmap
+
+Tracked openly so you know what to expect (see also *Known Limitations* in [`SECURITY.md`](./SECURITY.md)):
+
+- Keep decrypted secrets out of the WebView (resolve credentials in the backend)
+- Optional master password / lock screen
+- One-click reconnect for dropped sessions
+- SFTP browser, port forwarding and jump hosts
+- Import from `~/.ssh/config`
 
 ---
 
