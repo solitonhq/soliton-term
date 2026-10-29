@@ -33,7 +33,7 @@ Soliton Term is divided into two tightly integrated layers:
 
 1. **Native Rust Core (`src-tauri/`)**
    - **PTY & SSH Session Engine (`ssh_pty.rs`):** Spawns real macOS pseudo-terminals (`portable-pty`) running OpenSSH (`/usr/bin/ssh`) or local shells (`/bin/zsh`). Automatically handles SSH password prompts, passphrase prompts, host key verification, and temporary Ephemeral SSH Key (`0600`) materialization.
-   - **Encrypted SQLite Vault (`db.rs`):** Persists hierarchical folders, servers, credentials, parametric snippets, and temporary session aliases in a local SQLite database (`soliton_vault.sqlite3`). All sensitive secrets (SSH passwords and private keys) are encrypted at rest using **AES-256-GCM** with an OS-protected master key (`.vault_master.key`).
+   - **Encrypted SQLite Vault (`db.rs`):** Persists hierarchical folders, servers, credentials, parametric snippets, and temporary session aliases in a local SQLite database (`soliton_vault.sqlite3`). All sensitive secrets (SSH passwords and private keys) are encrypted at rest using **AES-256-GCM** with a master key held in the macOS Keychain.
 
 2. **Reactive Frontend (`src/`)**
    - **State & Persistence Bridge (`store/useAppStore.ts`):** Powered by **Zustand**, synchronizing UI state with Tauri IPC commands (`load_vault_snapshot`, `save_host`, `save_group`, `save_credential`, etc.).
