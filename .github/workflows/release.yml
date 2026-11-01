@@ -1,39 +1,51 @@
 name: Release
 
+# Pushing a tag like v0.2.0 builds signed DMGs for Apple Silicon and Intel and creates a DRAFT GitHub Release
+# (see docs/RELEASING.md). Tags with a suffix (v0.2.0-rc1) are marked as pre-releases.
 on:
   push:
-    tags: ["v*"]
+    tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   RCODESIGN_VERSION: "0.29.0"
 
 jobs:
-  macos:
+  dmg:
+    name: DMG (${{ matrix.target }})
+    runs-on: macos-latest # Apple Silicon runner; the Intel build is cross-compiled
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write       # build provenance attestation
+      attestations: write
     strategy:
       matrix:
         target: [aarch64-apple-darwin, x86_64-apple-darwin]
-    runs-on: macos-latest # Apple Silicon runner; Intel is cross-compiled
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (toolchain input selects the version)
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
 
-      # rcodesign signs with a plain .p12 (no Apple account, no trust settings).
-      # Built from crates.io at a pinned version rather than downloading a binary.
+      - name: Check the tag matches the version files
+        run: scripts/check-version.sh "$GITHUB_REF_NAME"
+
+      # rcodesign signs with a plain .p12 (no Apple account, no trust-settings changes). It is built from crates.io
+      # at a pinned version, with the crate's own lockfile, instead of downloading a prebuilt binary.
       - name: Cache rcodesign
         id: rcodesign-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cargo/bin/rcodesign
           key: rcodesign-${{ env.RCODESIGN_VERSION }}-${{ runner.os }}-${{ runner.arch }}
@@ -43,27 +55,64 @@ jobs:
 
       - run: npm ci
 
-      - name: Check signing secrets
-        env:
-          P12: ${{ secrets.SOLITON_SIGNING_P12 }}
-          PW: ${{ secrets.SOLITON_SIGNING_P12_PASSWORD }}
-        run: |
-          [ -n "$P12" ] && [ -n "$PW" ] || { echo "::error::Set SOLITON_SIGNING_P12 and SOLITON_SIGNING_P12_PASSWORD (see docs/SIGNING.md)"; exit 1; }
-
       - name: Build, sign and package
         env:
           P12_B64: ${{ secrets.SOLITON_SIGNING_P12 }}
           SOLITON_SIGNING_P12_PASSWORD: ${{ secrets.SOLITON_SIGNING_P12_PASSWORD }}
         run: |
+          if [ -z "$P12_B64" ] || [ -z "$SOLITON_SIGNING_P12_PASSWORD" ]; then
+            echo "::error::Set SOLITON_SIGNING_P12 and SOLITON_SIGNING_P12_PASSWORD (see docs/SIGNING.md)"; exit 1
+          fi
           echo "$P12_B64" | base64 --decode > "$RUNNER_TEMP/signing.p12"
           SOLITON_SIGNING_P12="$RUNNER_TEMP/signing.p12" scripts/package-macos.sh "${{ matrix.target }}"
           rm -f "$RUNNER_TEMP/signing.p12"
 
-      - name: Upload to draft release
+      - name: Checksum
+        working-directory: src-tauri/target/${{ matrix.target }}/release/bundle/dmg
+        run: for f in SolitonTerm_*.dmg; do shasum -a 256 "$f" > "$f.sha256"; done
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: src-tauri/target/${{ matrix.target }}/release/bundle/dmg/SolitonTerm_*.dmg
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/SolitonTerm_*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/SolitonTerm_*.dmg.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Draft release
+    needs: dmg
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+
+      - name: Software bill of materials
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: dist/SolitonTerm-sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Create draft release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
-            gh release create "$GITHUB_REF_NAME" --draft --title "Soliton Term $GITHUB_REF_NAME" \
-              --notes "See CHANGELOG.md. Builds are signed with a self-signed identity, not notarized: on first launch run \`xattr -cr \"/Applications/Soliton Term.app\"\`."
-          gh release upload "$GITHUB_REF_NAME" src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg --clobber
+          flags=(--draft --generate-notes --title "Soliton Term ${GITHUB_REF_NAME#v}")
+          case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease);; esac
+          gh release create "$GITHUB_REF_NAME" dist/* "${flags[@]}" \
+            --notes "Install: open the DMG, drag Soliton Term to Applications, then run \`xattr -cr \"/Applications/Soliton Term.app\"\` once (the app is signed with a self-signed identity and is not notarized). Verify the download as described in SECURITY.md."

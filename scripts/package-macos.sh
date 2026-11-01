@@ -52,7 +52,7 @@ STAGE="$(mktemp -d)"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 mkdir -p "$OUT/dmg"
-DMG="$OUT/dmg/Soliton Term_${VERSION}_${ARCH}.dmg"
+DMG="$OUT/dmg/SolitonTerm_${VERSION}_${ARCH}.dmg"
 rm -f "$DMG"
 hdiutil create -volname "Soliton Term" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 echo "==> Done: $DMG"
