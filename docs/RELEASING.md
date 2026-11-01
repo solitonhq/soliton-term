@@ -20,4 +20,11 @@ tag is pushed. Maintainers only.
 6. **Smoke-test the DMG** from the draft on a clean macOS user: install, clear quarantine, open, add a host, connect.
    Then publish the draft.
 
-Required repository secrets: `SOLITON_SIGNING_P12`, `SOLITON_SIGNING_P12_PASSWORD`.
+Required secrets live in the protected `release` environment (only `v*` tags may deploy to it):
+`SOLITON_SIGNING_P12`, `SOLITON_SIGNING_P12_PASSWORD`.
+
+## One-time repository setup
+
+Branch protection, the release-tag ruleset, secret scanning and the `release` environment are applied by
+[`scripts/configure-repo.sh`](../scripts/configure-repo.sh) (run `--dry-run` first; `--signing-secrets` also stores the
+signing identity). It needs a public repository on the GitHub Free plan.

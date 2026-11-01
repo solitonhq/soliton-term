@@ -17,6 +17,7 @@ jobs:
     name: DMG (${{ matrix.target }})
     runs-on: macos-latest # Apple Silicon runner; the Intel build is cross-compiled
     timeout-minutes: 60
+    environment: release   # holds the signing secrets; only v* tags may deploy (scripts/configure-repo.sh)
     permissions:
       contents: read
       id-token: write       # build provenance attestation
