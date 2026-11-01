@@ -13,17 +13,19 @@ Whether you are fixing a bug, proposing a new feature, improving terminal perfor
 1. [Code of Conduct](#code-of-conduct)
 2. [Architecture Overview](#architecture-overview)
 3. [Prerequisites & Development Setup](#prerequisites--development-setup)
-4. [Project Structure](#project-structure)
-5. [Security & Cryptography Standards](#security--cryptography-standards)
-6. [UI/UX & Theme Guidelines](#uiux--theme-guidelines)
-7. [Adding Custom Terminal Themes](#adding-custom-terminal-themes)
-8. [Commit Message & Pull Request Guidelines](#commit-message--pull-request-guidelines)
+4. [Running the Checks](#running-the-checks)
+5. [Project Structure](#project-structure)
+6. [Security & Cryptography Standards](#security--cryptography-standards)
+7. [UI/UX & Theme Guidelines](#uiux--theme-guidelines)
+8. [Adding Custom Terminal Themes](#adding-custom-terminal-themes)
+9. [Sign-off (DCO) and licensing](#sign-off-dco-and-licensing)
+10. [Commit Message & Pull Request Guidelines](#commit-message--pull-request-guidelines)
 
 ---
 
 ## Code of Conduct
 
-We are committed to providing a welcoming, respectful, and harassment-free experience for everyone in our open-source community. Please be constructive in code reviews, issues, and discussions.
+We are committed to providing a welcoming, respectful, and harassment-free experience for everyone in our open-source community. Please be constructive in code reviews, issues, and discussions. The full text is in [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md).
 
 ---
 
@@ -32,8 +34,8 @@ We are committed to providing a welcoming, respectful, and harassment-free exper
 Soliton Term is divided into two tightly integrated layers:
 
 1. **Native Rust Core (`src-tauri/`)**
-   - **PTY & SSH Session Engine (`ssh_pty.rs`):** Spawns real macOS pseudo-terminals (`portable-pty`) running OpenSSH (`/usr/bin/ssh`) or local shells (`/bin/zsh`). Automatically handles SSH password prompts, passphrase prompts, host key verification, and temporary Ephemeral SSH Key (`0600`) materialization.
-   - **Encrypted SQLite Vault (`db.rs`):** Persists hierarchical folders, servers, credentials, parametric snippets, and temporary session aliases in a local SQLite database (`soliton_vault.sqlite3`). All sensitive secrets (SSH passwords and private keys) are encrypted at rest using **AES-256-GCM** with a master key held in the macOS Keychain.
+   - **PTY & SSH Session Engine (`ssh_pty.rs`):** Spawns real macOS pseudo-terminals (`portable-pty`) running OpenSSH (`/usr/bin/ssh`) or local shells (`/bin/zsh`). Answers OpenSSH's own password prompt once, and materializes an ephemeral `0600` key file that is removed when the session ends.
+   - **Encrypted SQLite Vault (`db.rs`):** Persists hierarchical folders, servers, credentials, parametric snippets, and temporary session aliases in a local SQLite database (`soliton_vault.sqlite3`). All sensitive secrets (SSH passwords and private keys) are encrypted at rest using **AES-256-GCM** with a master key held in the macOS Keychain (`vault_key.rs`). Everything the WebView sends is validated in `validate.rs`.
 
 2. **Reactive Frontend (`src/`)**
    - **State & Persistence Bridge (`store/useAppStore.ts`):** Powered by **Zustand**, synchronizing UI state with Tauri IPC commands (`load_vault_snapshot`, `save_host`, `save_group`, `save_credential`, etc.).
@@ -50,8 +52,8 @@ To build and run Soliton Term locally on macOS, ensure you have the following in
   ```bash
   xcode-select --install
   ```
-- **Node.js (v18+ or v20+ LTS)** & **npm**
-- **Rust Toolchain (`rustup`, `cargo`, `rustc` 1.77+):**
+- **Node.js 20+** & **npm**
+- **Rust toolchain** (stable, via `rustup`):
   ```bash
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   ```
@@ -66,7 +68,7 @@ To build and run Soliton Term locally on macOS, ensure you have the following in
 
 2. **Install frontend dependencies:**
    ```bash
-   npm install
+   npm ci
    ```
 
 3. **Verify TypeScript types and frontend production bundle:**
@@ -84,7 +86,7 @@ To build and run Soliton Term locally on macOS, ensure you have the following in
    npm run tauri dev
    ```
 
-6. **Build the native macOS `.app` and `.dmg` installer:**
+6. **Build the native macOS `.app` and `.dmg` installer** (unsigned; see [`docs/SIGNING.md`](./docs/SIGNING.md) for the signed build):
    ```bash
    npm run tauri build
    ```
@@ -126,8 +128,10 @@ soliton-term/
 │   └── index.css                            # Semantic theme CSS variables (Dark Black, Dark Blue, Light)
 └── src-tauri/
     ├── src/
-    │   ├── db.rs                            # SQLite schema & AES-256-GCM encryption/decryption
-    │   ├── ssh_pty.rs                       # Native PTY process manager & SSH auto-authentication
+    │   ├── db.rs                            # SQLite schema, AES-256-GCM encryption, atomic import
+    │   ├── vault_key.rs                     # Master key in the macOS Keychain (+ legacy file migration)
+    │   ├── validate.rs                      # Backend validation of every IPC payload / import
+    │   ├── ssh_pty.rs                       # PTY manager, ephemeral key files, password-prompt detection
     │   ├── lib.rs                           # Tauri IPC command handlers
     │   └── main.rs                          # Binary entry point
     ├── Cargo.toml                           # Rust dependencies
@@ -140,14 +144,12 @@ soliton-term/
 
 Because Soliton Term manages production infrastructure credentials, every contribution **must** adhere to strict security practices:
 
-1. **Zero Plaintext Secrets at Rest:**
-   - Never store raw passwords or private keys in `localStorage`, unencrypted JSON files, or unencrypted SQLite columns. All secrets must pass through `encrypt_secret` / `decrypt_secret` (`AES-256-GCM`) in [`src-tauri/src/db.rs`](./src-tauri/src/db.rs).
-2. **Strict File Permissions (`0600`):**
-   - Any file containing key material (such as `.vault_master.key`, `soliton_vault.sqlite3`, or temporary SSH identity files in `/tmp`) must enforce `0600` permissions (`rw-------`) on Unix.
-3. **SSH Command Injection Prevention:**
-   - Never construct shell strings with unescaped user hostnames or usernames. Always pass arguments as discrete array elements to `/usr/bin/ssh` (`-p`, `-l`, `--`, `<hostname>`) and validate hostnames/usernames against leading dashes (`-`) or whitespace.
-4. **Sanitized Logging:**
-   - Never log `secretValue`, `secret_data`, or PTY authentication buffers via `println!`, `dbg!`, or `console.log`.
+1. **Zero plaintext secrets at rest:** never store raw passwords or private keys in `localStorage`, plain JSON files or unencrypted SQLite columns. Secrets go through `encrypt_secret` / `decrypt_secret` (AES-256-GCM) in [`src-tauri/src/db.rs`](./src-tauri/src/db.rs); the key stays in the Keychain.
+2. **Strict file permissions (`0600`)** for any file with key material (the vault, ephemeral SSH identity files); create them with the right mode from the start instead of chmod-ing afterwards.
+3. **Validate in the backend:** every new IPC command that accepts data must validate it in [`validate.rs`](./src-tauri/src/validate.rs) with tests. The WebView is not a trust boundary.
+4. **SSH injection prevention:** never build shell strings from hostnames or usernames. Pass discrete arguments to `/usr/bin/ssh` (`-p`, `-l`, `--`, `<hostname>`) and reject leading dashes and whitespace.
+5. **Fail loudly:** no silent fallbacks for crypto or Keychain errors (never return ciphertext as a secret, never write an empty secret on failure).
+6. **Sanitized logging:** never log `secretValue`, key material or PTY authentication buffers (`println!`, `dbg!`, `console.log`).
 
 If you discover a security vulnerability, please refer to [`SECURITY.md`](./SECURITY.md) rather than opening a public issue.
 
@@ -173,22 +175,52 @@ Terminal color schemes are defined in [`src/themes/terminalThemes.ts`](./src/the
 
 ---
 
+## Sign-off (DCO) and licensing
+
+Contributions are accepted under the [Developer Certificate of Origin](https://developercertificate.org) (DCO): by adding a
+`Signed-off-by` line you certify that you wrote the change or have the right to submit it under the project's license.
+There is no CLA to sign. Add the line with:
+
+```bash
+git commit -s -m "fix(ssh): handle usernames containing @"
+```
+
+If you forgot, fix existing commits with:
+
+```bash
+git rebase --signoff main && git push --force-with-lease
+```
+
+The `DCO` check on every pull request verifies it.
+
+The project is licensed under the [Apache License 2.0](LICENSE). By submitting a contribution you agree that it is
+licensed under the same terms (Section 5 of the license). Only submit code you wrote or have the right to contribute, and
+keep third-party code's original license headers. If you add a dependency, make sure its license is permissive (MIT, BSD,
+ISC, Zlib, Apache-2.0) and run `python3 scripts/gen_notices.py` to refresh
+[`THIRD_PARTY_NOTICES.txt`](THIRD_PARTY_NOTICES.txt). The names and logos of Soliton are not covered by the license
+(see [`NOTICE`](NOTICE)).
+
+---
+
 ## Commit Message & Pull Request Guidelines
 
-### Commit Convention
+### Commit convention
 We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 - `feat: add one-click host duplication in sidebar`
 - `fix(ssh): support domain usernames containing @ symbol`
-- `sec(vault): enforce 0600 permissions on SQLite vault file`
-- `ui(sidebar): add subfolder creation option to folder + menu`
+- `security(vault): enforce 0600 permissions on SQLite vault file`
 - `docs: expand contributing guide and architecture overview`
 
-### Pull Request Checklist
-Before submitting a Pull Request, please verify that:
-- [ ] `npm run build` completes with zero TypeScript or Vite errors.
-- [ ] `cargo check` inside `src-tauri/` passes with zero errors.
-- [ ] UI changes have been tested in **Dark Black**, **Dark Blue**, and **Light** themes.
-- [ ] No real credentials, IP addresses, or private keys are included in your commits.
+`main` has a linear history and pull requests are **squash-merged**, so the pull request title becomes the commit message:
+make it a Conventional Commit.
 
-Thank you for helping make **Soliton Term** the best open-source SSH & Remote Server Manager for macOS! ❤️
+### Pull request checklist
+Fill in the template. In short:
+- [ ] `npm run typecheck && npm test` and the Rust checks above pass.
+- [ ] Commits are signed off (`git commit -s`).
+- [ ] UI changes were tried in **Dark Black**, **Dark Blue** and **Light**.
+- [ ] No real credentials, IP addresses, private keys or private hostnames in code, tests or screenshots.
+- [ ] Changes to credentials, SSH or the PTY come with tests and a note on the security impact.
+
+Thank you for helping make **Soliton Term** better!

@@ -1,0 +1,11 @@
+# Reviews are requested from these people automatically. Keep in sync with MAINTAINERS.md.
+*                          @DavidHayter
+/.github/                  @DavidHayter
+/scripts/                  @DavidHayter
+/src-tauri/src/vault_key.rs @DavidHayter
+/src-tauri/src/db.rs       @DavidHayter
+/src-tauri/src/ssh_pty.rs  @DavidHayter
+/src-tauri/src/validate.rs @DavidHayter
+/SECURITY.md               @DavidHayter
+/GOVERNANCE.md             @DavidHayter
+/docs/SIGNING.md           @DavidHayter

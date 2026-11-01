@@ -1,0 +1,37 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping! Please check the [README](../tree/main#troubleshooting-keychain-access-prompt) first.
+        **Remove passwords, private keys and private hostnames** from anything you paste.
+  - type: input
+    id: version
+    attributes:
+      label: Soliton Term version
+      description: Shown in the DMG file name (SolitonTerm_<version>_…) or the release page
+    validations: { required: true }
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and chip
+      placeholder: macOS 15.1, Apple M2
+    validations: { required: true }
+  - type: dropdown
+    id: auth
+    attributes:
+      label: How do you connect?
+      options: [Password from the vault, SSH key from the vault, No stored credential, Local terminal, Not applicable]
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, what you expected, what you saw (error text, screenshot).
+    validations: { required: true }
+  - type: textarea
+    id: details
+    attributes:
+      label: Extra details
+      description: Does the same connection work with plain `ssh` in Terminal? Any error dialog text?
