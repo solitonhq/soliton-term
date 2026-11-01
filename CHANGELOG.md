@@ -17,6 +17,10 @@ First public release.
 - New brand identity: vector logo and wordmark (stacked + horizontal), app icon, light/dark variants.
 - CI (typecheck, tests, fmt, clippy) and tagged release workflow for macOS arm64 and x86_64.
 
+### Fixed
+- Launch no longer crashes when the Keychain key cannot be read; an explanatory Retry/Quit dialog is shown instead.
+- Top bar shows only the logo mark.
+
 ### Security
 - Vault master key stored in the macOS Keychain; legacy `.vault_master.key` is migrated and shredded.
 - Decryption fails loudly; no silent empty writes or ciphertext returned as secrets.

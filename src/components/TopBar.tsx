@@ -62,17 +62,7 @@ export const TopBar: React.FC = () => {
                 : "/soliton-mark-compact.svg"
             }
             alt="Soliton Term"
-            className="w-6 h-6 object-contain"
-            draggable={false}
-          />
-          <img
-            src={
-              appTheme === "light"
-                ? "/soliton-wordmark-horizontal-light.svg"
-                : "/soliton-wordmark-horizontal.svg"
-            }
-            alt="Soliton Term"
-            className="h-[15px] w-auto object-contain"
+            className="w-7 h-7 object-contain"
             draggable={false}
           />
         </div>

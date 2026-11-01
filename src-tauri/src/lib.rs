@@ -173,6 +173,42 @@ fn build_alias_injection_payload(aliases: Vec<(String, String)>) -> String {
     )
 }
 
+/// Text shown when the vault key cannot be read from the Keychain.
+fn unlock_failure_message(err: &str) -> String {
+    format!(
+        "Soliton Term could not unlock your vault.\n\n{err}\n\n\
+         If macOS asked whether Soliton Term may use the \"com.soliton.term\" Keychain item, \
+         choose \"Always Allow\" (macOS asks again after every update of an unsigned build). \
+         Your data has not been changed.\n\n\
+         Choose Retry to try again."
+    )
+}
+
+/// Opens the vault, and on failure explains why and offers a retry instead of
+/// crashing the app during launch (a failing `setup` aborts the process).
+fn open_vault_or_ask(app_dir: &std::path::Path) -> DatabaseManager {
+    loop {
+        match DatabaseManager::new(app_dir.to_path_buf()) {
+            Ok(db) => return db,
+            Err(e) => {
+                eprintln!("vault: {e}");
+                let answer = rfd::MessageDialog::new()
+                    .set_level(rfd::MessageLevel::Error)
+                    .set_title("Soliton Term")
+                    .set_description(unlock_failure_message(&e))
+                    .set_buttons(rfd::MessageButtons::OkCancelCustom(
+                        "Retry".into(),
+                        "Quit".into(),
+                    ))
+                    .show();
+                if !matches!(answer, rfd::MessageDialogResult::Custom(ref b) if b == "Retry") {
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -182,7 +218,7 @@ pub fn run() {
                 .app_data_dir()
                 .unwrap_or_else(|_| std::env::temp_dir().join("soliton-term"));
             ssh_pty::purge_stale_key_files();
-            let db_manager = DatabaseManager::new(app_dir)?;
+            let db_manager = open_vault_or_ask(&app_dir);
             app.manage(db_manager);
             app.manage(SshPtyManager::new());
             Ok(())
@@ -216,4 +252,17 @@ pub fn run() {
                 ssh_pty::purge_stale_key_files();
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unlock_failure_message_includes_reason_and_guidance() {
+        let m = unlock_failure_message("Failed to read vault key from Keychain: denied");
+        assert!(m.contains("denied"));
+        assert!(m.contains("Always Allow"));
+        assert!(m.contains("Retry"));
+    }
 }

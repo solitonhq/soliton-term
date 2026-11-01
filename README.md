@@ -62,6 +62,14 @@
 
 On first launch your vault is empty: add a server, open a local terminal, or import a workspace bundle. If you used an earlier build, its master key is moved into the Keychain automatically (macOS may ask permission once).
 
+### Troubleshooting: the app does not open / asks for Keychain access
+
+The vault key is stored in the macOS Keychain and macOS ties that item to the app's code signature. Unsigned builds get a new signature with every release, so the **first launch after each update shows a Keychain prompt** (the window appears only after you answer it, and it can sit behind other windows).
+
+- Enter your login password and choose **Always Allow**.
+- If you chose *Deny*, Soliton Term shows a dialog explaining what happened. Choose **Retry** and answer the prompt again. Your vault is never modified by a failed unlock.
+- Signed and notarized releases keep a stable identity and do not re-prompt after updates.
+
 ---
 
 ## 🛠️ Building from Source
