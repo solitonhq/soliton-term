@@ -6,9 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-01
+
 ### Changed
 - **Supported platform: Apple Silicon on macOS 13 or later.** The declared minimum moves from macOS 12 to 13: the frontend build targets Safari 16, the WebKit that ships with macOS 13, and nothing older was ever run. Tested on macOS 15 only.
 - **Apple Silicon only.** The Intel (x86_64) DMG that shipped with 0.1.0 was cross-compiled and never run on an Intel Mac, so it has been withdrawn and releases no longer build it. Intel support returns when it can be tested (see `ROADMAP.md`).
+- The app bundle now declares **macOS 13** as its minimum (0.1.0 declared 12, which was never tested).
+
+### Security
+- Keys, nonces and key-file names are generated with `rand::random` instead of a zero buffer overwritten by `fill_bytes` (same CSPRNG, no behaviour change; it also silences a CodeQL false positive).
+- The release workflow keeps the signing key out of the build step; the key is only visible to the signing step.
+
+### Maintenance
+- Dependencies: `tauri` 2.12.5, `tauri-build` 2.7.4, `tokio` 1.54.1, `zustand` 5.0.16 and other patch/minor updates; GitHub Actions moved to their current major versions.
+- README screenshots and the scripted demo server they were made with (`scripts/demo`).
 
 ## [0.1.0] - 2026-11-01
 
@@ -38,5 +49,6 @@ First public release. Apple Silicon (developed and tested on macOS 15). Its bund
 Not notarized (macOS shows a Gatekeeper warning on first launch); decrypted secrets are held in the WebView while the app
 runs; no master password yet. Details and plans: [`SECURITY.md`](SECURITY.md), [`ROADMAP.md`](ROADMAP.md).
 
-[Unreleased]: https://github.com/solitonhq/soliton-term/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/solitonhq/soliton-term/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/solitonhq/soliton-term/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/solitonhq/soliton-term/releases/tag/v0.1.0
