@@ -2,6 +2,17 @@
   "name": "soliton-term",
   "private": true,
   "version": "0.1.0",
+  "description": "SSH and remote server manager for macOS: a vault, folders, tabs, snippets and broadcast, built with Tauri.",
+  "license": "Apache-2.0",
+  "author": "Soliton Term contributors",
+  "homepage": "https://solitonhq.github.io/products/soliton-term/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/solitonhq/soliton-term.git"
+  },
+  "bugs": {
+    "url": "https://github.com/solitonhq/soliton-term/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

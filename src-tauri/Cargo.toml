@@ -2,7 +2,10 @@
 name = "soliton-term"
 version = "0.1.0"
 description = "Soliton Term — Hybrid Termius & RDM SSH Manager for macOS"
-authors = ["Merthan Telli"]
+authors = ["Soliton Term contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/solitonhq/soliton-term"
+homepage = "https://solitonhq.github.io/products/soliton-term/"
 edition = "2021"
 
 [lib]

@@ -22,7 +22,8 @@
 [![React 18](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![Security: AES-256-GCM](https://img.shields.io/badge/Vault-AES--256--GCM%20%2B%20Keychain-10B981?style=for-the-badge)](./SECURITY.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/solitonhq/soliton-term/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/solitonhq/soliton-term/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-38BDF8?style=for-the-badge)](./LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-38BDF8?style=for-the-badge)](./LICENSE)
+[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/solitonhq/soliton-term?style=for-the-badge&label=Scorecard)](https://scorecard.dev/viewer/?uri=github.com/solitonhq/soliton-term)
 
 </div>
 
@@ -163,4 +164,6 @@ Tracked openly so you know what to expect (see also *Known Limitations* in [`SEC
 
 ## 📄 License
 
-Distributed under the **MIT License**. See [`LICENSE`](./LICENSE) for more information.
+Soliton Term is part of [**Soliton**](https://github.com/solitonhq), tools shaped by a DevOps engineer's perspective, and is open source under the **Apache License 2.0**. See [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE); third-party components are listed in [`THIRD_PARTY_NOTICES.txt`](./THIRD_PARTY_NOTICES.txt). The Soliton name and logos are not covered by the license.
+
+- Security: [`SECURITY.md`](./SECURITY.md) · Help: [`SUPPORT.md`](./SUPPORT.md) · Contributing: [`CONTRIBUTING.md`](./CONTRIBUTING.md) · Roadmap: [`ROADMAP.md`](./ROADMAP.md) · Governance: [`GOVERNANCE.md`](./GOVERNANCE.md)
