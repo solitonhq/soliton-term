@@ -1,6 +1,12 @@
 # Minor and patch updates arrive as one grouped pull request per ecosystem. Major versions are upgraded deliberately
 # (they can change cryptography, SQLite or UI behaviour), so version-update PRs for them are not opened; Dependabot
 # *security* updates are not affected by these rules.
+#
+# Also upgraded by hand, in lockstep, because a bump of one half breaks the build or the app:
+#   - Tauri: the Rust crates (tauri, tauri-build, tauri-plugin-*) and the npm packages (@tauri-apps/*) must have the same
+#     major.minor, and Dependabot cannot update two ecosystems in one pull request.
+#   - xterm and lucide-react: 0.x minor releases are breaking (addon peer ranges, icon names) and CI does not exercise the
+#     terminal at runtime.
 version: 2
 updates:
   - package-ecosystem: cargo
@@ -12,6 +18,10 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "tauri"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "tauri-*"
+        update-types: ["version-update:semver-minor"]
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly }
@@ -21,6 +31,12 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "@tauri-apps/*"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "@xterm/*"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "lucide-react"
+        update-types: ["version-update:semver-minor"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
