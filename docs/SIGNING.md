@@ -43,6 +43,20 @@ The release workflow signs with two repository secrets:
 | `SOLITON_SIGNING_P12` | `base64 -i ~/.config/soliton-signing/signing.p12` |
 | `SOLITON_SIGNING_P12_PASSWORD` | contents of `~/.config/soliton-signing/pass` |
 
+## How the key is protected in CI
+
+The key can sign an app that macOS will let read the vault key from users' Keychains, so it is treated as sensitive:
+
+- It lives only in the `release` **environment**, which only `v*` tags may deploy to. Tags can only be created by repository
+  admins and can never be moved or deleted (repository ruleset). Pull requests and forks cannot read it.
+- It is exposed to **one step** only: signing. The build step runs every dependency's build scripts, so it gets no secrets
+  (`package-macos.sh --build-only` vs `--sign-only`). The signing step runs the pinned `rcodesign` and `hdiutil`.
+- The `.p12` is written to the runner's temp directory and deleted right after signing; GitHub masks the values in logs.
+- All actions are pinned to commit SHAs and `rcodesign` is built from crates.io at a pinned version with its lockfile.
+
+If the key is ever exposed: delete the secrets, run `scripts/create-signing-identity.sh` again (after moving the old
+directory away), update the secrets and publish a release. Users then get one Keychain prompt; their data is unaffected.
+
 ## Moving to Developer ID later
 
 Sign and notarize with the Apple certificate instead. The Keychain item created under the
