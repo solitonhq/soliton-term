@@ -54,7 +54,7 @@
 
 ## 💿 Install
 
-1. Download the latest `Soliton Term_<version>_aarch64.dmg` (Apple Silicon) or `_x64.dmg` (Intel) from the [**Releases**](https://github.com/solitonhq/soliton-term/releases) page.
+1. Download the latest `SolitonTerm_<version>_aarch64.dmg` (Apple Silicon) or `SolitonTerm_<version>_x64.dmg` (Intel) from the [**Releases**](https://github.com/solitonhq/soliton-term/releases) page. Every release lists SHA-256 checksums, a build provenance attestation and an SBOM; see [Verifying a download](./SECURITY.md#verifying-a-download).
 2. Open the DMG and drag **Soliton Term** into **Applications**.
 3. *(Unsigned builds only)* If macOS Gatekeeper blocks the first launch, clear the quarantine flag:
    ```bash
