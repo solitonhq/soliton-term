@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 env:
-  RCODESIGN_VERSION: "0.29.0"
+  # Do NOT name this RCODESIGN_*: rcodesign reads every RCODESIGN_<KEY> variable as a config setting and fails on unknown keys.
+  CODESIGN_TOOL_VERSION: "0.29.0"
 
 jobs:
   dmg:
@@ -49,10 +50,10 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cargo/bin/rcodesign
-          key: rcodesign-${{ env.RCODESIGN_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+          key: rcodesign-${{ env.CODESIGN_TOOL_VERSION }}-${{ runner.os }}-${{ runner.arch }}
       - name: Install rcodesign
         if: steps.rcodesign-cache.outputs.cache-hit != 'true'
-        run: cargo install apple-codesign --locked --version "$RCODESIGN_VERSION"
+        run: cargo install apple-codesign --locked --version "$CODESIGN_TOOL_VERSION"
 
       - run: npm ci
 
