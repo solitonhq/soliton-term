@@ -4,7 +4,6 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use rand::RngCore;
 use rusqlite::{params, Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -126,8 +125,7 @@ impl DatabaseManager {
         if plaintext.is_empty() {
             return Ok(String::new());
         }
-        let mut nonce_bytes = [0u8; 12];
-        rand::thread_rng().fill_bytes(&mut nonce_bytes);
+        let nonce_bytes: [u8; 12] = rand::random();
         let ciphertext = self
             .cipher
             .encrypt(Nonce::from_slice(&nonce_bytes), plaintext.as_bytes())

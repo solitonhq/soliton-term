@@ -5,7 +5,6 @@
 //! database, which made the encryption little more than obfuscation; that file
 //! is migrated into the Keychain on first launch and then securely removed.
 
-use rand::RngCore;
 use std::fs;
 use std::path::Path;
 
@@ -99,11 +98,7 @@ pub fn load_or_create_key(
             Ok(key)
         }
         None => {
-            let key = legacy.unwrap_or_else(|| {
-                let mut k = [0u8; KEY_LEN];
-                rand::thread_rng().fill_bytes(&mut k);
-                k
-            });
+            let key = legacy.unwrap_or_else(rand::random::<[u8; KEY_LEN]>);
             backend.set(&key)?;
             // Only drop the legacy file once the Keychain demonstrably holds the key.
             if backend.get()?.as_deref() != Some(&key[..]) {

@@ -88,8 +88,7 @@ fn remove_key_file(path: &Option<PathBuf>) {
 fn write_ephemeral_key(private_key: &str) -> Result<PathBuf, String> {
     let dir = key_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot create key directory: {e}"))?;
-    let mut name = [0u8; 16];
-    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut name);
+    let name: [u8; 16] = rand::random();
     let path = dir.join(format!(
         "k_{}",
         name.iter().map(|b| format!("{b:02x}")).collect::<String>()
