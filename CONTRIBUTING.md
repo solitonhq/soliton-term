@@ -47,7 +47,7 @@ Soliton Term is divided into two tightly integrated layers:
 
 To build and run Soliton Term locally on macOS, ensure you have the following installed:
 
-- **macOS 12.0+** (Apple Silicon `aarch64` or Intel `x86_64`)
+- **macOS 13.0+** on Apple Silicon (`aarch64`). Intel (`x86_64`) is not tested or supported.
 - **Xcode Command Line Tools:**
   ```bash
   xcode-select --install

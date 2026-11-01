@@ -4,9 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Supported platform: Apple Silicon on macOS 13 or later.** The declared minimum moves from macOS 12 to 13: the frontend build targets Safari 16, the WebKit that ships with macOS 13, and nothing older was ever run. Tested on macOS 15 only.
+- **Apple Silicon only.** The Intel (x86_64) DMG that shipped with 0.1.0 was cross-compiled and never run on an Intel Mac, so it has been withdrawn and releases no longer build it. Intel support returns when it can be tested (see `ROADMAP.md`).
+
 ## [0.1.0] - 2026-11-01
 
-First public release. macOS 12 or later (developed and tested on macOS 15), Apple Silicon and Intel.
+First public release. Apple Silicon (developed and tested on macOS 15). Its bundle declares macOS 12 as the minimum and a cross-compiled Intel DMG was briefly attached; both claims were never tested, see *Unreleased*.
 
 ### Added
 - SSH and remote server manager: tabs and a native terminal (xterm.js) on top of the system OpenSSH, a folder tree with
@@ -32,4 +38,5 @@ First public release. macOS 12 or later (developed and tested on macOS 15), Appl
 Not notarized (macOS shows a Gatekeeper warning on first launch); decrypted secrets are held in the WebView while the app
 runs; no master password yet. Details and plans: [`SECURITY.md`](SECURITY.md), [`ROADMAP.md`](ROADMAP.md).
 
+[Unreleased]: https://github.com/solitonhq/soliton-term/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/solitonhq/soliton-term/releases/tag/v0.1.0

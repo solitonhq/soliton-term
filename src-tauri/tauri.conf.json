@@ -41,7 +41,7 @@
     "shortDescription": "SSH and remote server manager",
     "longDescription": "Soliton Term is a native macOS SSH and remote server manager with an encrypted credential vault, a folder tree, tabs, broadcast and snippets.",
     "macOS": {
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "13.0"
     }
   }
 }

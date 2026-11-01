@@ -18,6 +18,7 @@ Direction, not a promise: priorities change with feedback. Vote with a 👍 on t
 
 - SFTP browser, port forwarding, split panes.
 - Notarized builds once an Apple Developer ID is available.
+- Intel (x86_64) builds, once they can be tested on real hardware.
 
 ## Not planned
 

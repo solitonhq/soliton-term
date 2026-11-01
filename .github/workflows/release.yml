@@ -1,6 +1,6 @@
 name: Release
 
-# Pushing a tag like v0.2.0 builds signed DMGs for Apple Silicon and Intel and creates a DRAFT GitHub Release
+# Pushing a tag like v0.2.0 builds the signed Apple Silicon DMG and creates a DRAFT GitHub Release
 # (see docs/RELEASING.md). Tags with a suffix (v0.2.0-rc1) are marked as pre-releases.
 on:
   push:
@@ -16,7 +16,7 @@ env:
 jobs:
   dmg:
     name: DMG (${{ matrix.target }})
-    runs-on: macos-latest # Apple Silicon runner; the Intel build is cross-compiled
+    runs-on: macos-latest # Apple Silicon runner. Intel (x86_64) is not published: it cannot be tested yet (ROADMAP.md)
     timeout-minutes: 60
     environment: release   # holds the signing secrets; only v* tags may deploy (scripts/configure-repo.sh)
     permissions:
@@ -25,7 +25,7 @@ jobs:
       attestations: write
     strategy:
       matrix:
-        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+        target: [aarch64-apple-darwin]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0

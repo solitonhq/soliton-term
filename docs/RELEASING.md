@@ -14,7 +14,7 @@ tag is pushed. Maintainers only.
    git push origin vX.Y.Z
    ```
    Tags with a suffix (`v0.2.0-rc1`) are published as pre-releases.
-5. The workflow checks the tag against the version files, builds arm64 and x86_64, signs with the stable identity
+5. The workflow checks the tag against the version files, builds the Apple Silicon DMG, signs with the stable identity
    ([docs/SIGNING.md](SIGNING.md)), writes SHA-256 files, generates an SBOM, attests build provenance, and creates a
    **draft** release.
 6. **Smoke-test the DMG** from the draft on a clean macOS user: install, clear quarantine, open, add a host, connect.

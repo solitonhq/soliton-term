@@ -75,12 +75,14 @@
 
 ## 💿 Install
 
-1. Download the latest `SolitonTerm_<version>_aarch64.dmg` (Apple Silicon) or `SolitonTerm_<version>_x64.dmg` (Intel) from the [**Releases**](https://github.com/solitonhq/soliton-term/releases) page. Every release lists SHA-256 checksums, a build provenance attestation and an SBOM; see [Verifying a download](./SECURITY.md#verifying-a-download).
+1. Download the latest `SolitonTerm_<version>_aarch64.dmg` (Apple Silicon: M1 or later) from the [**Releases**](https://github.com/solitonhq/soliton-term/releases) page. Every release lists SHA-256 checksums, a build provenance attestation and an SBOM; see [Verifying a download](./SECURITY.md#verifying-a-download).
 2. Open the DMG and drag **Soliton Term** into **Applications**.
 3. *(Unsigned builds only)* If macOS Gatekeeper blocks the first launch, clear the quarantine flag:
    ```bash
    xattr -cr "/Applications/Soliton Term.app"
    ```
+
+**Requirements:** an Apple Silicon Mac (M1 or later) running macOS 13 or later. Developed and tested on macOS 15; older versions are untested, and there is no Intel build.
 
 On first launch your vault is empty: add a server, open a local terminal, or import a workspace bundle. If you used an earlier build, its master key is moved into the Keychain automatically (macOS may ask permission once).
 
@@ -95,7 +97,7 @@ If you pick *Deny*, Soliton Term explains what happened and offers **Retry**. A 
 ## 🛠️ Building from Source
 
 ### Prerequisites
-- **macOS** (Apple Silicon M1/M2/M3/M4 or Intel)
+- **macOS** on Apple Silicon (M1 or later). Intel Macs can try building from source, but Intel is untested and not supported.
 - **Node.js** `v20+`
 - **Rust** stable (`rustup default stable`)
 
