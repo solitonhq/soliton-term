@@ -35,6 +35,27 @@
 
 ---
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/01-workspace.png" alt="Soliton Term: folder tree, an SSH session and the quick-copy bar" width="900">
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/02-command-palette.png" alt="⌘K command palette"><br><sub><b>⌘K palette</b>: connect, copy a vault secret or run a snippet without leaving the keyboard.</sub></td>
+    <td width="50%"><img src="docs/screenshots/03-multi-exec.png" alt="Multi-Exec on four servers"><br><sub><b>Multi-Exec</b>: one command on several servers, each pane answers for itself.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/05-parametric-snippet.png" alt="Parametric snippet runner"><br><sub><b>Parametric snippets</b>: <code>{{variables}}</code> are asked for, with a live preview.</sub></td>
+    <td width="50%"><img src="docs/screenshots/06-light-theme.png" alt="Light theme"><br><sub><b>Light theme</b> and 11 terminal palettes.</sub></td>
+  </tr>
+</table>
+
+<sub>The screenshots show the real app connected to a local, scripted demo SSH server; no real hosts or credentials. See <a href="scripts/demo/README.md"><code>scripts/demo</code></a>.</sub>
+
+---
+
 ## ✨ Key Features
 
 | Feature | Description |
