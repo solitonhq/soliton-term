@@ -21,6 +21,9 @@ First public release.
 - Launch no longer crashes when the Keychain key cannot be read; an explanatory Retry/Quit dialog is shown instead.
 - Top bar shows only the logo mark.
 
+### Changed
+- Releases are signed with a stable self-signed identity (`scripts/package-macos.sh`, `docs/SIGNING.md`) so macOS does not re-ask for Keychain access after each update.
+
 ### Security
 - Vault master key stored in the macOS Keychain; legacy `.vault_master.key` is migrated and shredded.
 - Decryption fails loudly; no silent empty writes or ciphertext returned as secrets.

@@ -62,13 +62,11 @@
 
 On first launch your vault is empty: add a server, open a local terminal, or import a workspace bundle. If you used an earlier build, its master key is moved into the Keychain automatically (macOS may ask permission once).
 
-### Troubleshooting: the app does not open / asks for Keychain access
+### Troubleshooting: Keychain access prompt
 
-The vault key is stored in the macOS Keychain and macOS ties that item to the app's code signature. Unsigned builds get a new signature with every release, so the **first launch after each update shows a Keychain prompt** (the window appears only after you answer it, and it can sit behind other windows).
+The vault key lives in the macOS Keychain. Releases are signed with a stable identity, so macOS asks **once** (after the first install, or when upgrading from a build made before signing was introduced). Enter your login password and choose **Always Allow**; later updates do not ask again. See [`docs/SIGNING.md`](./docs/SIGNING.md).
 
-- Enter your login password and choose **Always Allow**.
-- If you chose *Deny*, Soliton Term shows a dialog explaining what happened. Choose **Retry** and answer the prompt again. Your vault is never modified by a failed unlock.
-- Signed and notarized releases keep a stable identity and do not re-prompt after updates.
+If you pick *Deny*, Soliton Term explains what happened and offers **Retry**. A failed unlock never modifies your vault.
 
 ---
 
@@ -103,7 +101,8 @@ cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings &
 
 ### 4. Build Production macOS `.app` & `.dmg` Installer
 ```bash
-npm run tauri build
+npm run tauri build            # unsigned (ad-hoc) – the Keychain prompt returns after every rebuild
+scripts/package-macos.sh       # signed with the stable identity, see docs/SIGNING.md
 ```
 This produces:
 - **macOS Application Bundle:** `src-tauri/target/release/bundle/macos/Soliton Term.app`
